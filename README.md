@@ -1,7 +1,12 @@
 Supybot-Titler
 ==============
 
-Supybot plugin to display link/url titles with specialization for Youtube/Vimeo videos/imageshttps://github.com/frumiousbandersnatch/sobrieti-plugins/blob/master/plugins/Scores/plugin.py
+Supybot plugin to display link/url titles with specialization for Youtube/Vimeo videos/images
+
+NOTE: far from working. Try if you want.
+
+
+https://github.com/frumiousbandersnatch/sobrieti-plugins/blob/master/plugins/Scores/plugin.py
 https://github.com/grantbow/plugins/blob/668f058e7fed9119bf07e636de956337eafae2a3/WikiSearch/plugin.py
 https://github.com/gsf/supybot-plugins/blob/aeafd7350822d56305c10a365a83f322e557264e/edsu-plugins/AudioScrobbler/plugin.py
 https://github.com/dahu/Supybot-Infobot/blob/8197bb95fddecc7702d1e6745441577330449caa/plugin.py
