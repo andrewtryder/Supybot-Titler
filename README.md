@@ -33,3 +33,5 @@ AttributeError: 'NoneType' object has no attribute 'read'
 ERROR 2013-01-23T18:40:37 Exception id: 0x6da3a
 
 - Maybe pass already tiny'd links?
+
+http://mashable.com/2013/01/23/unlocking-cellphones-illegal/

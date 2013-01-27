@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 ###
 # Copyright (c) 2013, spline
 # All rights reserved.
@@ -101,6 +102,11 @@ class Titler(callbacks.Plugin):
         cleaned = msg.translate(dict.fromkeys(range(32))).strip()
         return re.sub(r'\s+', ' ', cleaned)
 
+    # tidy urls. sometimes, they come in with garbage infront.
+    def tidyurl(self, url):
+        url = re.sub('(.*)(http[^\s]*)', '\g<2>', url)
+        return url
+
     # main handler to find urls in public messages.
     def doPrivmsg(self, irc, msg):
         if ircmsgs.isCtcp(msg) and not ircmsgs.isAction(msg):
@@ -112,21 +118,22 @@ class Titler(callbacks.Plugin):
             else:
                 text = msg.args[1]
             for url in utils.web.urlRe.findall(text):
+                url = self.tidyurl(url)
                 title = self.titledirector(url)
                 shorturl = self.shortenurl(url)
                 if not shorturl:
-                    irc.queueMsg(ircmsgs.privmsg(channel,"{0} - {1}".format(url,title)))
+                    irc.queueMsg(ircmsgs.privmsg(channel,"{0} - {1}".format(url,title.encode('utf-8'))))
                 else:
-                    irc.queueMsg(ircmsgs.privmsg(channel,"{0} - {1}".format(shorturl,title)))
+                    irc.queueMsg(ircmsgs.privmsg(channel,"{0} - {1}".format(shorturl,title.encode('utf-8'))))
 
     # test function.
     def titler(self, irc, msg, args, opttitle):
         title = self.titledirector(opttitle)
         shorturl = self.shortenurl(opttitle)
         if not shorturl:
-            irc.reply("{0} - {1}".format(opttitle,title))
+            irc.reply("{0} - {1}".format(opttitle,title.encode('utf-8')))
         else:
-            irc.reply("{0} - {1}".format(shorturl,title))
+            irc.reply("{0} - {1}".format(shorturl,title.encode('utf-8')))
     titler = wrap(titler, [('text')])
 
     # shorten url using bitly.
@@ -180,7 +187,7 @@ class Titler(callbacks.Plugin):
         self.log.info(url)
         self.log.info(str(domain))
         # put a handler per domain(s)
-        if domain in ('www.youtube.com','youtube.com','youtu.be'): #youtube.
+        if domain in ('m.youtube.com','www.youtube.com','youtube.com','youtu.be'): #youtube.
             title = self.yttitle(url)
         elif domain in ('vimeo.com','player.vimeo.com'):
             title = self.vimeotitle(url)
@@ -236,6 +243,11 @@ class Titler(callbacks.Plugin):
                 videoid = query.path.split('/')[2]
             else:
                 videoid = None
+        elif query.hostname == "m.youtube.com":
+            if query.path == "/details":
+                videoid = parse_qs(query.query)['v'][0]
+            else:
+                videoid = None
         else:
             videoid = None
         
@@ -255,9 +267,17 @@ class Titler(callbacks.Plugin):
             return None
         else:
             data = data['data']
-            return "Youtube Video: {0}  Category: {1}  Duration: {2}  Views: {3}  Rating: {4}".format(data.get('title'),\
-                data.get('category'),("%dm%ds"%divmod(data.get('duration'),60)),self.numfmt(data.get('viewCount')),\
-                    data.get('rating'))
+            title = data.get('title')
+            category = data.get('category')
+            duration = data.get('duration')
+            if duration:
+                duration = "%dm%ds"%divmod(duration,60)
+            viewCount = data.get('viewCount')
+            if viewCount:
+                viewCount = self.numfmt(viewCount)
+            rating = data.get('rating')
+            return "Youtube Video: %s  Category: %s  Duration: %s  Views: %s  Rating: %s"\
+                % (title, category, duration, viewCount, rating)
 
     # this will open a build a urlopener, inject headers, and then open a url and return the response object.
     def openurl(self, url):
