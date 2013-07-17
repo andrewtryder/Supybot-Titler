@@ -25,7 +25,7 @@ __author__ = supybot.authors.unknown
 __contributors__ = {}
 
 # This is a url where the most recent plugin package can be downloaded.
-__url__ = '' # 'http://supybot.com/Members/yourname/Titler/download'
+__url__ = 'http://supybot.com/reticulatingspline/Supybot-Titler/'
 
 import config
 import plugin

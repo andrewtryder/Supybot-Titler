@@ -23,3 +23,4 @@ https://github.com/ProgVal/Limnoria/blob/master/plugins/News/plugin.py
 https://github.com/gsf/supybot-plugins/blob/a57cb6aaab1d52b7b9fad73be4e869ce8c108f60/plugins/Cast/plugin.py
 https://github.com/rubinlinux/supybot-twitter/blob/master/plugin.py
 https://github.com/Erika-Mustermann/Limnoria/blob/master/plugins/Web/plugin.py
+https://github.com/Suwako/Naoko/blob/2bc130d88fa675ff4d2aca708dcb096aeb3995d6/naoko/lib/apiclient.py
