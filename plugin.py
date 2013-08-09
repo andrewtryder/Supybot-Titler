@@ -159,6 +159,10 @@ class Titler(callbacks.Plugin):
     #####################
 
     def longurlservices(self, irc, msg, args):
+        """
+        Debug command to test longurl services.
+        """
+        
         irc.reply("Services: {0}".format(self.getlongurlservices()))
     longurlservices = wrap(longurlservices)
 
