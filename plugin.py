@@ -106,17 +106,96 @@ class Titler(callbacks.Plugin):
         self.__parent.__init__(irc)
         self.encoding = 'utf8'  # irc output.
         self.headers = {'User-agent': 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2'}
+        # longurl stuff
         self.longUrlCacheTime = time.time()
         self.longUrlServices = None
-        if not self.longUrlServices:
-            self.longUrlServices = self.getlongurlservices()
+        self._getlongurlservices()  # initial fetch.
+        # bitly.
+        self.bitlylogin = self.registryValue('bitlyLogin')  # ehunter
+        self.bitlyapikey = self.registryValue('bitlyApiKey')  # R_2aa4785c8c1f87226d329c7cf224a455
+        # THESE NEED TO BE CHECKED TO MAKE SURE WE HAVE THEM.
+        # displayLinkTitles displayImageTitles displayOtherTitles displayShortURL
+        # DOMAIN-SPECIFIC PARSING.
+        self.domainparsers = {
+            'vimeo.com': '_vimeotitle',
+            'player.vimeo.com': '_vimeotitle',
+            'm.youtube.com': '_yttitle',
+            'www.youtube.com': '_yttitle',
+            'youtube.com': '_yttitle',
+            'youtu.be': '_yttitle',
+            'i.imgur.com': '_imgur',
+            'imgur.com': '_imgur'
+                             }
+    def die(self):
+        self.__parent.die()
+
+    ##############
+    # FORMATTING #
+    ##############
+
+    def _red(self, string):
+        """Returns a red string."""
+        return ircutils.mircColor(string, 'red')
+
+    def _yellow(self, string):
+        """Returns a yellow string."""
+        return ircutils.mircColor(string, 'yellow')
+
+    def _green(self, string):
+        """Returns a green string."""
+        return ircutils.mircColor(string, 'green')
+
+    def _blue(self, string):
+        """Returns a blue string."""
+        return ircutils.mircColor(string, 'blue')
+
+    def _bold(self, string):
+        """Returns a bold string."""
+        return ircutils.bold(string)
+
+    def _ul(self, string):
+        """Returns an underline string."""
+        return ircutils.underline(string)
+
+    def _bu(self, string):
+        """Returns a bold/underline string."""
+        return ircutils.bold(ircutils.underline(string))
+
+    #########################
+    # HTTP HELPER FUNCTIONS #
+    #########################
+
+    def _openurl(self, url, urlread=True):
+        """Generic http fetcher we can use here."""
+
+        opener = urllib2.build_opener()
+        opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
+        # big try except block and error handling for each.
+        self.log.info("_openurl: Trying to open: {0}".format(url))
+        try:
+            response = opener.open(url, timeout=5)
+            # by default, we're going to read the object into a string.
+            if urlread:
+                return response.read()
+            else:  # however, in certain cases, this is not helpful because we need the urllib2 object.
+                return response
+        except urllib2.HTTPError, e:
+            self.log.info('_openurl: ERROR: Cannot open: {0} HTTP Error code: {1} '.format(url,e.code))
+            return None
+        except urllib2.URLError, e:
+            self.log.info('_openurl: ERROR: Cannot open: {0} URL error: {1} '.format(url,e.reason))
+            return None
+        except socket.timeout:
+            self.log.info('_openurl: ERROR: Cannot open: {0} timed out.'.format(url))
+            return None
 
     ####################
     # BASE62 FUNCTIONS #
     ####################
 
-    def base62_encode(number):
+    def _base62encode(number):
         """Encode a number in base62 (all digits + a-z + A-Z)."""
+
         base62chars = string.digits + string.letters
         l = []
         while number > 0:
@@ -125,8 +204,9 @@ class Titler(callbacks.Plugin):
             l.insert(0, base62chars[remainder])
         return ''.join(l) or '0'
 
-    def base62_decode(str_value):
+    def _base62decode(str_value):
         """Decode a base62 string (all digits + a-z + A-Z) to a number."""
+
         base62chars = string.digits + string.letters
         return sum([base62chars.index(char) * (62 ** (len(str_value) - index - 1)) for index, char in enumerate(str_value)])
 
@@ -134,15 +214,16 @@ class Titler(callbacks.Plugin):
     # INTERNAL HELPER FUNCTIONS #
     #############################
 
-    def numfmt(self, num):
+    def _numfmt(self, num):
         """Format numbers into human readable units."""
+
         num = float(num)
         for x in ['','k','m','b']:
             if num < 1000.0 and num > -1000.0:
                 return "%3.1f%s" % (num, x)
             num /= 1000.0
 
-    def sizefmt(self, num):
+    def _sizefmt(self, num):
         """Format size information into human readable units."""
 
         if num is None:
@@ -154,6 +235,19 @@ class Titler(callbacks.Plugin):
             num /= 1024.0
         return "%3.1f%s" % (num, 'TB')
 
+    def _cleantitle(self, msg):
+        """Clean up the title of a URL."""
+
+        cleaned = msg.translate(dict.fromkeys(range(32))).strip()
+        return re.sub(r'\s+', ' ', cleaned)
+
+    def _tidyurl(self, url):
+        """Tidy up urls for prior to processing."""
+
+        # do utf-8 stuff here? decode.
+        url = re.sub('(.*)(http[^\s]*)', '\g<2>', url)
+        return url
+
     #####################
     # LONGURL FUNCTIONS #
     #####################
@@ -162,97 +256,247 @@ class Titler(callbacks.Plugin):
         """
         Debug command to test longurl services.
         """
-        
-        irc.reply("Services: {0}".format(self.getlongurlservices()))
+
+        irc.reply("longurlcachetime: {0} NOW: {1}".format(self.longUrlCacheTime, time.time()))
+        irc.reply("Services: {0}".format(self._getlongurlservices()))
+
     longurlservices = wrap(longurlservices)
 
-    def getlongurlservices(self):
-        """Function to maintain list of shorturl services for resolving
-        with cache.
-        """
+    def _getlongurlservices(self):
+        """Function to maintain list of shorturl services for resolving with cache."""
 
-        if self.longUrlServices is not None and (time.time()-self.longUrlCacheTime < 86400):
+        if self.longUrlServices and abs(time.time()-self.longUrlCacheTime) < 86400:
+            self.log.info("longurlservices: Just returning..")
+            # we have services and they're within the cache period.
             return self.longUrlServices
         else:
-            self.log.info("Fetching longurl services.")
-            req_url = 'http://api.longurl.org/v2/services?format=json'
-            req = urllib2.Request(req_url, headers=self.headers)
-            services = json.loads(urllib2.urlopen(req).read())
-            domains = [item for item in services]
-            self.longUrlCacheTime = time.time()
-            self.longUrlServices = domains
-            return domains
+            self.log.info("longurlservices: Fetching longurl services.")
+            url = 'http://api.longurl.org/v2/services?format=json'
+            lookup = self._openurl(url)
+            if not lookup:
+                self.log.error("longurlservices: could not fetch URL: {0}".format(url))
+                return None
+            # we did get a url. lets process.
+            try:
+                services = json.loads(lookup)
+                domains = [item for item in services]
+                self.longUrlCacheTime = time.time()
+                self.longUrlServices = domains
+                return domains
+            except Exception, e:
+                self.log.error("longurlservices: ERROR processing JSON in longurl services: {0}".format(e))
+                return None
 
-    def longurl(self, surl):
+    def _longurl(self, surl):
         """Resolve shortened urls into their long form."""
+
+        url = 'http://api.longurl.org/v2/expand?format=json&url=%s' % surl
+        lookup = self._openurl(url)
+        if not lookup:
+            self.log.error("_longurl: could not fetch: {0}".format(url))
+            return None
+        # we have a url, proceed with processing json.
         try:
-            req_url = 'http://api.longurl.org/v2/expand?format=json&url=%s' % surl
-            req = urllib2.Request(req_url, headers=self.headers)
-            lookup = json.loads(urllib2.urlopen(req).read())
+            lookup = json.loads(lookup)
             return lookup['long-url']
-        except:
+        except Exception, e:
+            self.log.error("_longurl: json processing error: {0}".format(e))
             return None
 
-    ########################
-    # URL HELPER FUNCTIONS #
-    ########################
+    ####################
+    # BITLY SHORTENING #
+    ####################
 
-    def clean(self, msg):
-        """Clean up the title."""
-
-        cleaned = msg.translate(dict.fromkeys(range(32))).strip()
-        return re.sub(r'\s+', ' ', cleaned)
-
-    def tidyurl(self, url):
-        """Tidy up urls for prior to processing."""
-
-        # do utf-8 stuff here? decode.
-        url = re.sub('(.*)(http[^\s]*)', '\g<2>', url)
-        return url
-
-    #########################
-    # HTTP HELPER FUNCTIONS #
-    #########################
-
-    def openurl(self, url):
-        """Generic http fetcher we can use here."""
-
-        opener = urllib2.build_opener()
-        opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
-        try:
-            response = opener.open(url, timeout=5)
-        except urllib2.HTTPError, e:
-            self.log.info('ERROR: Cannot open: {0} HTTP Error code: {1} '.format(url,e.code))
-            return None
-        except urllib2.URLError, e:
-            self.log.info('ERROR: Cannot open: {0} URL error: {1} '.format(url,e.reason))
-            return None
-        except socket.timeout:
-            self.log.info('ERROR: Cannot open: {0} timed out.'.format(url))
-            return None
-        return response
-
-    def shortenurl(self, url):
+    def _shortenurl(self, url):
         """Shorten links via bit.ly."""
 
-        if urlparse(url).hostname in ('bit.ly', 'j.mp', 'bitly.com'):  # don't reshorten bitly links.
+        # don't reshorten bitly links.
+        if urlparse(url).hostname in ('bit.ly', 'j.mp', 'bitly.com'):
             return url
-        # now try to shorten links.
+        # otherwise, try to shorten links.
+        bitlyurl = 'http://api.bitly.com/v3/shorten?login=%s&apiKey=%s&longUrl=%s' % (self.bitlylogin, self.bitlyapikey, url)
+        # fetch our url.
+        lookup = self._openurl(bitlyurl)
+        if not lookup:
+            self.log.error("_shortenurl: could not fetch: {0}".format(url))
+            return None
+        # now try to parse json.
         try:
-            req_url = 'http://api.bitly.com/v3/shorten?login=ehunter&apiKey=R_2aa4785c8c1f87226d329c7cf224a455&longUrl=%s' % (url)
-            response=urllib2.urlopen(req_url)
-            a = json.loads(response.read())
-            if a['status_code'] is not 200:
-                self.log.error("Error trying to shorten {0}. bitly api returned {1}".format(url,str(a)))
-                return None
-            else:
-                return a['data']['url']
-        except:
+            bitlyurl = json.loads(lookup)
+            return bitlyurl['data']['url']
+        except Exception, e:
+            self.log.error("_shortenurl: error parsing JSON: {0}".format(e))
             return None
 
-    def vimeotitle(self, url):
+    ##################################
+    # MAIN LOGIC FOR FETCHING TITLES #
+    ##################################
+
+    def _titledirector(self, url):
+        """Main logic for how to handle links."""
+
+        domain = urlparse(url).hostname  # parse out domain.
+        # first, check if our link is inside a shortener. fetch real url.
+        if domain in self.longUrlServices or domain == 'pic.twitter.com':
+            realurl = self._longurl(url)  # try to expand it back to normal.
+            if realurl:  # if we get something back.
+                domain = urlparse(realurl).hostname  # parse the new domain.
+                url = realurl  # use the realurl.
+        #self.log.info(url)
+        # put a handler per domain(s)
+        if domain in self.domainparsers:
+            parsemethod = getattr(self, self.domainparsers[domain])
+            title = parsemethod(url)
+        else:  # we don't have a specific method so resort to generic title fetcher.
+            title = self._fetchtitle(url)
+        # now return the title.
+        return title
+
+    def _fetchtitle(self, url):
+        """Generic title fetcher for non-domain-specific titles."""
+
+        # fetch the url.
+        response = self._openurl(url, urlread=False)
+        if not response:  # make sure we have a resposne.
+            self.log.error("_fetchtitle: no response from: {0}".format(url))
+            return None
+        # now lets process the first 100k.
+        content = response.read(100*1024*1024)
+        # dict for handling/output.
+        bsoptions = {}
+        # get the "charset"
+        charset = response.info().getheader('Content-Type').split('charset=')
+        if len(charset) == 2:
+            bsoptions['fromEncoding'] = charset[-1]
+        # dictionary for the type and size of content if provided in the http header.
+        contentdict = {}
+        contentdict['type'] = response.info().getheader('Content-Type')
+        contentdict['size'] = response.info().getheader('Content-Length')
+        if not contentdict['size']:
+            contentdict['size'] = len(content)
+
+        # now, process various types of content here. Image->text->others.
+        # determine if it's an image and process.
+        if contentdict['type'].startswith('image/'):
+            # try/except with python images.
+            try:  # first try going from Pillow
+                from PIL import Image
+            except ImportError:  # try traditional import of old PIL
+                try:
+                    import Image
+                except ImportError:
+                    return None
+            # now we need cStringIO.
+            from cStringIO import StringIO
+
+            try:  # try/except because images can be corrupt.
+                im = Image.open(StringIO(content))
+            except:
+                self.log.error("_fetchtitle: ERROR: {0} is an invalid image I cannot read.".format(url))
+                return None
+            imgformat = im.format
+            if imgformat == 'GIF':  # check to see if animated.
+                try:
+                    im.seek(1)
+                    im.seek(0)
+                    imgformat = "Animated GIF"
+                except EOFError:
+                    pass
+            # we're good. lets return the type/dimensions/size.
+            return "Image type: {0}  Dimensions: {1}x{2}  Size: {3}".format(imgformat, im.size[0], im.size[1], self._sizefmt(contentdict['size']))
+        # if it is text, we try to just scrape the title out.
+        elif contentdict['type'].startswith('text/'):
+            soup = BeautifulSoup(content, convertEntities=BeautifulSoup.HTML_ENTITIES, **bsoptions)
+            try:  # try to parse w/BS + encode properly.
+                title = self._cleantitle(soup.first('title').string)
+                return title.encode('utf-8', 'ignore')
+            except Exception, e:
+                self.log.error("_fetchtitle: ERROR: Could not parse title of: {0} - {1}".format(url, e))
+                return None
+        # handle any other filetype using libmagic.
+        else:
+            try:
+                import magic
+                typeoffile = magic.from_buffer(content)
+                return "Content type: {0}  Size: {1}".format(typeoffile, self.sizefmt(contentdict['size']))
+            except Exception, e:  # give a detailed error here in the logs.
+                self.log.error("ERROR: _fetchtitle: error trying to parse {0} via other (else) :: {1}".format(url, e))
+                self.log.error("ERROR: _fetchtitle: no handler for {0} at {1}".format(response.info().getheader('Content-Type'), url))
+                return None
+
+    ##############
+    # MAIN LOGIC #
+    ##############
+
+    def _titler(self, url):
+        """This calls the title and url parts of our plugin."""
+
+        # we call each, individually.
+        title = self._titledirector(url)
+        shorturl = self._shortenurl(url)
+        # now handle what comes back.
+        if not title:  # give us something..
+            title = "No title."
+        if not shorturl:  # just repaste the pastedurl.
+            shorturl = url
+        # now return.
+        return "{0} - {1}".format(shorturl, title)
+
+    ############################################
+    # MAIN TRIGGER FOR URLS PASTED IN CHANNELS #
+    ############################################
+
+    #def doPrivmsg(self, irc, msg):
+    #    channel = msg.args[0]
+    #    user = msg.nick
+    #    linkdb = LinkDB()
+    #
+    #    if ircmsgs.isCtcp(msg) and not ircmsgs.isAction(msg):
+    #        return
+    #    if irc.isChannel(channel):  # must be in channel.
+    #        if ircmsgs.isAction(msg):  # if in action, remove.
+    #            text = ircmsgs.unAction(msg)
+    #        else:
+    #            text = msg.args[1]
+    #        for url in utils.web.urlRe.findall(text):  # find urls.
+    #            url = self._tidyurl(url)
+    #            title = self.titledirector(url).decode('utf-8')
+    #            shorturl = self.shortenurl(url)
+    #            if not shorturl:
+    #                output = url + " - " + title
+    #            else:
+    #                output = shorturl + " - " + title
+    #            # db
+    #            linkdb.add(url, title, channel, user)
+    #
+    #            irc.queueMsg(ircmsgs.privmsg(channel, output.encode('utf-8')))
+
+    #####################################################
+    # PUBLIC/PRIVATE TRIGGER, MAINLY USED FOR DEBUGGING #
+    #####################################################
+
+    def titler(self, irc, msg, args, opturl):
+        """<url>
+
+        Public test function for Titler.
+        Ex: http://www.google.com
+        """
+
+        output = self._titler(opturl)
+        # output.
+        irc.reply(output)
+
+    titler = wrap(titler, [('text')])
+
+    ######################################
+    # INDIVIDUAL DOMAIN PARSERS WITH API #
+    # (SEE README FOR HOW TO CODE MORE   #
+    ######################################
+
+    def _vimeotitle(self, url):
         """Fetch information about vimeo videos from API."""
 
+        # first, we have to parse the vimeo url because of how they do video ids.
         query = urlparse(url)
         if query.hostname == 'vimeo.com':
             if query.path.startswith('/m/'):
@@ -269,17 +513,61 @@ class Titler(callbacks.Plugin):
         if not videoid or not videoid.isdigit():
             self.log.error("Something went wrong finding the vimeo videoid for {0}".format(url))
             return None
-
         # try loading vimeo api
         try:
             f = urllib2.urlopen('http://vimeo.com/api/v2/video/%s.json' % videoid)
             data = json.load(f)[0]
+            return "Vimeo Video: {0}  Size: {1}x{2}  Duration: {3}".format(data['title'], data['width'], data['height'],("%dm%ds"%divmod(data['duration'],60)))
         except Exception, e:
             self.log.error("ERROR opening vimeo API url message {0} text {1}".format(e,str(f)))
+            return None
 
-        return "Vimeo Video: {0}  Size: {1}x{2}  Duration: {3}".format(data['title'], data['width'], data['height'],("%dm%ds"%divmod(data['duration'],60)))
+    def _imgur(self, url):
+        """Try and query imgur's API for image information."""
 
-    def yttitle(self, url):
+        query = urlparse(url)
+        # query.path will come in with something like fF7lnms or .json
+        # for imgur.com/gallery/fF7lnms.json
+        pathname = query.path
+        # make sure we have a pathname.
+        if not pathname or pathname == '':
+            return None
+        # we have our path so lets clean it up.
+        imgurid = pathname.split('.')[0]
+        # now that we have our imgurid, lets try and query the API.
+        imgururl = 'http://imgur.com/gallery%s.json' % imgurid
+        # fetch our url.
+        lookup = self._openurl(imgururl)
+        if not lookup:
+            self.log.error("_shortenurl: could not fetch: {0}".format(url))
+            return None
+        # now lets process the json.
+        try:
+            data = json.loads(lookup)
+            title = data['data']['image']['title']
+            size = data['data']['image']['size']  # size in B.
+            views = data['data']['image']['views']
+            mimetype = data['data']['image']['mimetype']
+            width = data['data']['image']['width']  # int
+            height = data['data']['image']['height']  # int
+            upvotes = data['data']['image']['ups']  # int
+            downvotes = data['data']['image']['downs']  # int
+            nsfw = data['data']['image']['nsfw']  # true | false
+            is_album = data['data']['image']['is_album']  # true | false
+            # now lets format the string to return.
+            o = "{0} - Views: {1} - MIME: {2} - Size: {3}x{4}({5}) - Votes: +{6}/-{7}".format(title, views, mimetype, width, height, self._sizefmt(size), upvotes, downvotes)
+            # be cheap to add album/nsfw on.
+            if nsfw == "true":
+                o = "{0} - {1}".format(o, self._bu("NSFW"))
+            if is_album == "true":
+                o = "{0} - {1}".format(o, self._bold("[ALBUM]"))
+            # finally, return our string.
+            return o
+        except Exception, e:
+            self.log.error("_imgur: ERROR processing JSON: {0}".format(e))
+            return None
+
+    def _yttitle(self, url):
         """Try and fetch youtube video information."""
 
         query = urlparse(url)
@@ -322,133 +610,13 @@ class Titler(callbacks.Plugin):
             category = data.get('category')
             duration = data.get('duration')
             if duration:
-                duration = "%dm%ds"%divmod(duration,60)
+                duration = "%dm%ds" % divmod(duration, 60)
             viewCount = data.get('viewCount')
             if viewCount:
-                viewCount = self.numfmt(viewCount)
+                viewCount = self._numfmt(viewCount)
             rating = data.get('rating')
             return "Youtube Video: %s  Category: %s  Duration: %s  Views: %s  Rating: %s"\
                 % (title, category, duration, viewCount, rating)
-
-    def titledirector(self, url):
-        """Main logic for how to handle links."""
-
-        domain = urlparse(url).hostname  # parse out domain.
-        # first, check if our link is inside a shortener. fetch real url.
-        if domain in self.longUrlServices or domain == 'pic.twitter.com':
-            realurl = self.longurl(url)  # try to shorten.
-            if realurl:  # if we get something back,
-                domain = urlparse(realurl).hostname  # parse the new domain.
-                url = realurl  # use the realurl.
-
-        self.log.info(url)
-
-        # put a handler per domain(s)
-        if domain in ('m.youtube.com', 'www.youtube.com', 'youtube.com', 'youtu.be'):
-            title = self.yttitle(url)
-        elif domain in ('vimeo.com', 'player.vimeo.com'):
-            title = self.vimeotitle(url)
-        else:
-            title = self.fetchtitle(url)
-
-        # now return the title.
-        if title:
-            return title
-        else:
-            return "No Title"
-
-    def fetchtitle(self, url):
-        """Generic title fetcher for non-specific titles."""
-
-        response = self.openurl(url)
-        if not response:
-            return "No title - had error fetching."
-        content = response.read(100*1024*1024)
-        bsoptions = {}
-        charset = response.info().getheader('Content-Type').split('charset=')
-        if len(charset) == 2: bsoptions['fromEncoding'] = charset[-1]
-        contentdict = {}
-        contentdict['type'] = response.info().getheader('Content-Type')
-        contentdict['size'] = response.info().getheader('Content-Length')
-        if not contentdict['size']: contentdict['size'] = len(content)
-
-        # now, process various types here. Image->text->others.
-        if contentdict['type'].startswith('image/'):  # determine if it's an image and process.
-            from PIL import Image
-            from cStringIO import StringIO
-
-            try:  # try/except because images can be corrupt.
-                im = Image.open(StringIO(content))
-            except:
-                self.log.error("ERROR: {0} is an invalid image I cannot read.".format(url))
-                return "Invalid image format."
-            imgformat = im.format
-            if imgformat == 'GIF':  # check to see if animated.
-                try:
-                    im.seek(1)
-                    im.seek(0)
-                    imgformat = "Animated GIF"
-                except EOFError:
-                    pass
-            return "Image type: {0}  Dimensions: {1}x{2}  Size: {3}".format(imgformat, im.size[0],im.size[1], self.sizefmt(contentdict['size']))
-        elif contentdict['type'].startswith('text/'): # text
-            soup = BeautifulSoup(content,convertEntities=BeautifulSoup.HTML_ENTITIES,**bsoptions)
-            try:
-                title = self.clean(soup.first('title').string)
-            except AttributeError:
-                title = 'Error reading title'
-            return title.encode('utf-8', 'ignore')
-        else: # handle any other filetype using libmagic.
-            try:
-                import magic
-                typeoffile = magic.from_buffer(content)
-                return "Content type: {0}  Size: {1}".format(typeoffile,self.sizefmt(contentdict['size']))
-            except:
-                self.log.info("error: no handler for {0} at {1}".format(response.info().getheader('Content-Type'), url))
-                return "Cannot determine file content. Size: {0}".format(contentdict['size'])
-
-    ################
-    # MAIN TRIGGER #
-    ################
-
-    def doPrivmsg(self, irc, msg):
-        channel = msg.args[0]
-        user = msg.nick
-        linkdb = LinkDB()
-
-        if ircmsgs.isCtcp(msg) and not ircmsgs.isAction(msg):
-            return
-        if irc.isChannel(channel):  # must be in channel.
-            if ircmsgs.isAction(msg):  # if in action, remove.
-                text = ircmsgs.unAction(msg)
-            else:
-                text = msg.args[1]
-            for url in utils.web.urlRe.findall(text):  # find urls.
-                url = self.tidyurl(url)
-                title = self.titledirector(url).decode('utf-8')
-                shorturl = self.shortenurl(url)
-                if not shorturl:
-                    output = url + " - " + title
-                else:
-                    output = shorturl + " - " + title
-                # db
-                linkdb.add(url, title, channel, user)
-
-                irc.queueMsg(ircmsgs.privmsg(channel, output.encode('utf-8')))
-
-    def titler(self, irc, msg, args, opttitle):
-        """<url>
-        Public test function for Titler.
-        """
-
-        title = self.titledirector(opttitle).decode('utf-8')
-        shorturl = self.shortenurl(opttitle)
-        if not shorturl:
-            output = opttitle + " - " + title
-        else:
-            output = shorturl + " - " + title
-        irc.reply(output)
-    titler = wrap(titler, [('text')])
 
 Class = Titler
 

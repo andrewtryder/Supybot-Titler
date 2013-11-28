@@ -24,3 +24,6 @@ https://github.com/gsf/supybot-plugins/blob/a57cb6aaab1d52b7b9fad73be4e869ce8c10
 https://github.com/rubinlinux/supybot-twitter/blob/master/plugin.py
 https://github.com/Erika-Mustermann/Limnoria/blob/master/plugins/Web/plugin.py
 https://github.com/Suwako/Naoko/blob/2bc130d88fa675ff4d2aca708dcb096aeb3995d6/naoko/lib/apiclient.py
+https://api.github.com/gists/6184514
+Got an idea for your titler plugin. You can parse the newegg API here: http://www.ows.newegg.com/Products.egg/{item number}/Specification for 
+                    newegg links.
