@@ -115,7 +115,7 @@ class Titler(callbacks.Plugin):
         self.bitlyapikey = self.registryValue('bitlyApiKey')  # R_2aa4785c8c1f87226d329c7cf224a455
         # THESE NEED TO BE CHECKED TO MAKE SURE WE HAVE THEM.
         # displayLinkTitles displayImageTitles displayOtherTitles displayShortURL
-        # DOMAIN-SPECIFIC PARSING.
+        # DOMAIN-SPECIFIC PARSING. FORMAT IS: DOMAIN: FUNCTION
         self.domainparsers = {
             'vimeo.com': '_vimeotitle',
             'player.vimeo.com': '_vimeotitle',
@@ -124,8 +124,10 @@ class Titler(callbacks.Plugin):
             'youtube.com': '_yttitle',
             'youtu.be': '_yttitle',
             'i.imgur.com': '_imgur',
-            'imgur.com': '_imgur'
+            'imgur.com': '_imgur',
+            'gist.github.com': '_gist'
                              }
+
     def die(self):
         self.__parent.die()
 
@@ -508,18 +510,21 @@ class Titler(callbacks.Plugin):
                 videoid = query.path.split('/')[2]
         else:
             videoid = None
-
-        # now check.
+        # now check and make sure we have it and its valid.
         if not videoid or not videoid.isdigit():
-            self.log.error("Something went wrong finding the vimeo videoid for {0}".format(url))
+            self.log.error("_vimeotitle: Could not parse vimeo id from url: {0}".format(url))
             return None
         # try loading vimeo api
+        vimeourl = 'http://vimeo.com/api/v2/video/%s.json' % videoid
+        lookup = self._openurl(vimeourl)
+        if not lookup:
+            self.log.error("_vimeotitle: could not fetch: {0}".format(url))
+            return None
         try:
-            f = urllib2.urlopen('http://vimeo.com/api/v2/video/%s.json' % videoid)
-            data = json.load(f)[0]
-            return "Vimeo Video: {0}  Size: {1}x{2}  Duration: {3}".format(data['title'], data['width'], data['height'],("%dm%ds"%divmod(data['duration'],60)))
+            data = json.loads(lookup)
+            return "Vimeo Video: {0} Size: {1}x{2} Duration: {3}".format(data['title'], data['width'], data['height'],("%dm%ds"%divmod(data['duration'],60)))
         except Exception, e:
-            self.log.error("ERROR opening vimeo API url message {0} text {1}".format(e,str(f)))
+            self.log.error("_vimeotitle: ERROR parsing JSON: {0}".format(e))
             return None
 
     def _imgur(self, url):
@@ -531,6 +536,7 @@ class Titler(callbacks.Plugin):
         pathname = query.path
         # make sure we have a pathname.
         if not pathname or pathname == '':
+            self.log.error("_gist: ERROR: could not determine pathname from: {0}".format(url))
             return None
         # we have our path so lets clean it up.
         imgurid = pathname.split('.')[0]
@@ -567,6 +573,57 @@ class Titler(callbacks.Plugin):
             self.log.error("_imgur: ERROR processing JSON: {0}".format(e))
             return None
 
+    def _gist(self, url):
+        """Try and process gist information."""
+
+        query = urlparse(url)
+        # https://api.github.com/gists/6184514
+        # https://gist.github.com/anonymous/6184514/raw/660fe8406300e5e3369ad32574f70976b3f6e042/gistfile1.txt
+        # https://gist.github.com/6184514
+        # https://gist.github.com/6184514.git
+        # https://gist.github.com/reticulatingspline/f6f457eb6df9fd6a8332
+        pathname = query.path
+        # make sure we have a pathname.
+        if not pathname or pathname == '':
+            self.log.error("_gist: ERROR: could not determine pathname from: {0}".format(url))
+            return None
+        else:  # pathname worked so lets remove the first char '/'
+            pathname = pathname[1:]
+            pathname = pathname.replace('.git', '')  # also remove ".git" if present.
+        # first, most gists are like this:
+        pathnamesplit = pathname.split('/')  # split on /
+        pathnamelen = len(pathnamesplit)  # len of such.
+        #self.log.info("URL: {0} SPLIT: {1} LEN: {2}".format(url, pathnamesplit, pathnamelen))
+        if pathnamelen == 1:
+            gistid = pathnamesplit[0]
+        elif pathnamelen == 2:  # handle reticulatingspline/f6f457eb6df9fd6a8332
+            gistid = pathnamesplit[1]  # 2nd element.
+        elif pathnamelen == 5:
+            gistid = pathnamesplit[1]  # 2nd element.
+        else:
+            self.log.error("_gist: ERROR: could not determine gistid from: {0}".format(url))
+            return None
+
+        # now that we have our gistid. lets try the api.
+        gisturl = 'https://api.github.com/gists/%s' % gistid
+        lookup = self._openurl(gisturl)
+        if not lookup:
+            self.log.error("_gist: could not fetch: {0}".format(url))
+            return None
+        # now lets process the json.
+        try:
+            data = json.loads(lookup)
+            desc = data['description']  # str.
+            #public = data['public']  # false | true
+            comments = data['comments']  # int.
+            created = data['created_at']  # created_at": "2013-07-04T16:57:34Z"
+            files = [k + " (" + self._sizefmt(v['size']) + ")"  for (k, v) in data['files'].items()]
+            o = "DESC: {0} COMMENTS: {1} POSTED: {2} FILES({3}): {4}".format(desc, comments, created, len(files), " | ".join(files))
+            return o
+        except Exception, e:
+            self.log.error("_gist: ERROR processing JSON: {0}".format(e))
+            return None
+
     def _yttitle(self, url):
         """Try and fetch youtube video information."""
 
@@ -592,19 +649,23 @@ class Titler(callbacks.Plugin):
 
         # for cases w/o a video ID like feeds or www.youtube.com
         if not videoid:
-            title = self.fetchtitle(url)
+            self.log.error("_yttitle: ERROR: Could not parse videoid from url: {0}".format(url))
+            title = self._fetchtitle(url)
             return title
+        # we have video id. lets fetch via gdata.
+        gdataurl =  'http://gdata.youtube.com/feeds/api/videos/%s?alt=jsonc&v=2' % videoid
+        lookup = self._openurl(gdataurl)
+        if not lookup:
+            self.log.error("_yttitle: could not fetch: {0}".format(url))
+            return None
+        # we have our stuff back. try and parse json.
         try:
-            f = urllib2.urlopen('http://gdata.youtube.com/feeds/api/videos/%s?alt=jsonc&v=2' % videoid)
-        except Exception, e:
-            self.log.error("ERROR: opening gdata API message {0}".format(e))
-            return None
-
-        data = json.load(f)
-        if 'error' in data:
-            self.log.error("ERROR: {0} trying to fetch {1}".format(data['error']['message'], gdataurl))
-            return None
-        else:
+            data = json.loads(lookup)
+            # check for errors.
+            if 'error' in data:
+                self.log.error("_yttitle: ERROR: {0} trying to fetch {1}".format(data['error']['message'], gdataurl))
+                return None
+            # no errors. process json.
             data = data['data']
             title = data.get('title')
             category = data.get('category')
@@ -615,8 +676,12 @@ class Titler(callbacks.Plugin):
             if viewCount:
                 viewCount = self._numfmt(viewCount)
             rating = data.get('rating')
-            return "Youtube Video: %s  Category: %s  Duration: %s  Views: %s  Rating: %s"\
-                % (title, category, duration, viewCount, rating)
+            ytlogo = "{0}{1}".format(self._bold(ircutils.mircColor("You", fg='red', bg='white')), self._bold(ircutils.mircColor("Tube", fg='white', bg='red')))
+            o = "{0} Video: {1} Category: {2} Duration: {3} Views: {4} Rating: {5}".format(ytlogo, title, category, duration, viewCount, rating)
+            return o
+        except Exception, e:
+            self.log.error("_yttitle: error processing JSON: {0}".format(e))
+            return None
 
 Class = Titler
 
