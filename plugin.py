@@ -127,7 +127,9 @@ class Titler(callbacks.Plugin):
             'imgur.com': '_imgur',
             'gist.github.com': '_gist',
             'www.dailymotion.com': '_dmtitle',
-            'dailymotion.com': '_dmtitle'
+            'dailymotion.com': '_dmtitle',
+            'www.blip.tv': '_bliptitle',
+            'blip.tv': '_bliptitle'
             }
 
     def die(self):
@@ -351,6 +353,9 @@ class Titler(callbacks.Plugin):
         if domain in self.domainparsers:
             parsemethod = getattr(self, self.domainparsers[domain])
             title = parsemethod(url)
+            # if this breaks, should we resort to generic title fetching?
+            if not title:
+                title = self._fetchtitle()
         else:  # we don't have a specific method so resort to generic title fetcher.
             title = self._fetchtitle(url)
         # now return the title.
@@ -492,10 +497,43 @@ class Titler(callbacks.Plugin):
 
     titler = wrap(titler, [('text')])
 
-    ######################################
-    # INDIVIDUAL DOMAIN PARSERS WITH API #
-    # (SEE README FOR HOW TO CODE MORE   #
-    ######################################
+    #######################################
+    # INDIVIDUAL DOMAIN PARSERS WITH API  #
+    # (SEE README FOR HOW TO CODE MORE)   #
+    #######################################
+
+    def _bliptitle(self, url):
+        """Fetch information for blip.tv"""
+
+        # http://blip.tv/the-gauntlet/the-gauntlet-season-2-episode-8-6693719?skin=json
+        query = urlparse(url)
+        pathname = query.path
+        # make sure we have a pathname.
+        if not pathname or pathname == '/' or pathname == '':
+            self.log.error("_bliptitle: ERROR: could not determine pathname from: {0}".format(url))
+            return None
+        # blip seems to be smart and requires you to just append ?skin=json.
+        apiurl = '%s?skin=json' % url
+        lookup = self._openurl(apiurl)
+        if not lookup:
+            self.log.error("_dmtitle: could not fetch: {0}".format(url))
+            return None
+        # try and parse json.
+        try:
+            # we must cleanup the JSONP part.
+            lookup = lookup.replace(']);', '').replace('blip_ws_results([', '')
+            self.log.info(lookup)
+            data = json.loads(lookup)
+            title = data['Post']['title']
+            width = data['Post']['media']['width']
+            height = data['Post']['media']['height']
+            desc = data['Post']['description']
+            posted = desc = data['Post']['datestamp']
+            o = "{0} Desc: {1} Size: {2}x{3} Posted: {4}".format(title, desc, width, height, posted)
+            return o
+        except Exception, e:
+            self.log.error("_bliptitle: ERROR processing JSON: {0}".format(e))
+            return None
 
     def _dmtitle(self, url):
         """Fetch information about dailymotion videos."""
@@ -694,8 +732,7 @@ class Titler(callbacks.Plugin):
         # for cases w/o a video ID like feeds or www.youtube.com
         if not videoid:
             self.log.error("_yttitle: ERROR: Could not parse videoid from url: {0}".format(url))
-            title = self._fetchtitle(url)
-            return title
+            return None
         # we have video id. lets fetch via gdata.
         gdataurl =  'http://gdata.youtube.com/feeds/api/videos/%s?alt=jsonc&v=2' % videoid
         lookup = self._openurl(gdataurl)
