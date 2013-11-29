@@ -125,8 +125,10 @@ class Titler(callbacks.Plugin):
             'youtu.be': '_yttitle',
             'i.imgur.com': '_imgur',
             'imgur.com': '_imgur',
-            'gist.github.com': '_gist'
-                             }
+            'gist.github.com': '_gist',
+            'www.dailymotion.com': '_dmtitle',
+            'dailymotion.com': '_dmtitle'
+            }
 
     def die(self):
         self.__parent.die()
@@ -494,6 +496,48 @@ class Titler(callbacks.Plugin):
     # INDIVIDUAL DOMAIN PARSERS WITH API #
     # (SEE README FOR HOW TO CODE MORE   #
     ######################################
+
+    def _dmtitle(self, url):
+        """Fetch information about dailymotion videos."""
+
+        # http://www.dailymotion.com/video/xsxgyh_eclectic-method-bill-murray_fun
+        query = urlparse(url)
+        pathname = query.path
+        # make sure we have a pathname.
+        if not pathname or pathname == '':
+            self.log.error("_dmtitle: ERROR: could not determine pathname from: {0}".format(url))
+            return None
+        else:  # pathname worked so lets remove the first char '/'
+            pathname = pathname[1:]
+        # now lets parse by the '/'
+        pathnamesplit = pathname.split('/')  # split on /
+        pathnamelen = len(pathnamesplit)  # len of such.
+        # check for most popular urls.
+        if pathnamelen == 2 and pathnamesplit[0] == "video":
+            urlid = pathnamesplit[1]
+        else:
+            self.log.error("_dmtitle: ERROR: could not determine videoid from url: {0}".format(url))
+            return None
+        # we have dmid. lets fetch their json.
+        apiurl = 'https://api.dailymotion.com/video/%s?fields=title,duration,description,explicit,language,rating' % urlid
+        lookup = self._openurl(apiurl)
+        if not lookup:
+            self.log.error("_dmtitle: could not fetch: {0}".format(url))
+            return None
+        # try and parse json.
+        try:
+            data = json.loads(lookup)
+            title = data['title']
+            dur = "%dm%ds" % divmod(data['duration'], 60)
+            desc = utils.web.htmlToText(data['description'])
+            explicit = data['explicit']
+            lang = data['language']
+            rating = data['rating']
+            o = "DailyMotion Video: {0} Duration: {1} Explicit: {2} Lang: {3} Rating: {4}/5 Desc: {5}".format(title, dur, explicit, lang, rating, desc)
+            return o
+        except Exception, e:
+            self.log.error("_dmtitle: ERROR processing JSON: {0}".format(e))
+            return None
 
     def _vimeotitle(self, url):
         """Fetch information about vimeo videos from API."""
