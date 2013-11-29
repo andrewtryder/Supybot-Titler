@@ -22,11 +22,12 @@ other types of files, using a system's file magic, thanks to python-magic.
 I also combined functionality of ShrinkUrl into this so that you can spit out a shortened (bitly) link with the
 title on a single line.
 
-NOTE: far from working. Try if you want.
-
 My intention with this plugin is for fellow developers to fork and add in patches for additional APIs. If you read
 the code in plugin.py, it is as simple as adding a function (follow the style in any of the ones at the bottom), and
-then supply a dict entry inside of self.domainparsers at top. The format is 'domain.com': '_nameofhandler'.
+then supply a dict entry inside of self.domainparsers at top. The format is 'domain.com': '_nameofhandler'. Feel free
+to fork the code, add in your function, and I'll be happy to merge.
+
+STATUS: Working but I'm sure bugs are present. Try if you want. Submit to me any logs/errors and I'll look at them.
 
 Setting up
 ==========
