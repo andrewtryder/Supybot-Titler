@@ -422,7 +422,9 @@ class Titler(callbacks.Plugin):
             try:  # try to parse w/BS + encode properly.
                 title = self._cleantitle(soup.first('title').string)
                 # should we also fetch description?
-                self.log.info("FETCHING TITLE: GD is? {0}".format(gd))
+                # self.log.info("FETCHING TITLE: GD is? {0}".format(gd))
+                # BLACK/WHITE LIST HERE
+                # https://www.dropbox.com/s/l8blwul6ss6bylh/2013-11-30%2012.06.48.jpeg <- turn off.
                 if gd:
                     desc = soup.find('meta', {'name':'description'})
                     if desc:  # found a description. make sure content is in there.
@@ -536,30 +538,33 @@ class Titler(callbacks.Plugin):
     # MAIN TRIGGER FOR URLS PASTED IN CHANNELS #
     ############################################
 
-    #def doPrivmsg(self, irc, msg):
-    #    channel = msg.args[0]
-    #    user = msg.nick
-    #    linkdb = LinkDB()
-    #
-    #    if ircmsgs.isCtcp(msg) and not ircmsgs.isAction(msg):
-    #        return
-    #    if irc.isChannel(channel):  # must be in channel.
-    #        if ircmsgs.isAction(msg):  # if in action, remove.
-    #            text = ircmsgs.unAction(msg)
-    #        else:
-    #            text = msg.args[1]
-    #        for url in utils.web.urlRe.findall(text):  # find urls.
-    #            url = self._tidyurl(url)
-    #            title = self.titledirector(url).decode('utf-8')
-    #            shorturl = self.shortenurl(url)
-    #            if not shorturl:
-    #                output = url + " - " + title
-    #            else:
-    #                output = shorturl + " - " + title
-    #            # db
-    #            linkdb.add(url, title, channel, user)
-    #
-    #            irc.queueMsg(ircmsgs.privmsg(channel, output.encode('utf-8')))
+    def doPrivmsg(self, irc, msg):
+        channel = msg.args[0]  # channel, if any.
+        # user = msg.nick  # nick of user.
+        # linkdb = LinkDB()   # disable for now.
+        # linkdb.add(url, title, channel, user)
+
+        # don't react to non-ACTION based messages.
+        if ircmsgs.isCtcp(msg) and not ircmsgs.isAction(msg):
+            return
+        if irc.isChannel(channel):  # must be in channel.
+            if ircmsgs.isAction(msg):  # if in action, remove.
+                text = ircmsgs.unAction(msg)
+            else:
+                text = msg.args[1]
+            # find all urls pasted.
+            for url in utils.web.urlRe.findall(text):
+                # url = self._tidyurl(url)  # should we tidy them?
+                output = self._titler(url, channel)
+                # now, with gd, we must check what output is.
+                if isinstance(output, dict):  # came back a dict.
+                    if 'title' in output and output['title']:  # we got a title back and is not None.
+                        irc.queueMsg(ircmsgs.privmsg(channel, "{0}".format(output['title'])))
+                    if 'desc' in output and output['desc']:  # we get a desc back and is not None.
+                        irc.queueMsg(ircmsgs.privmsg(channel, "{0}".format(output['desc'])))
+                else:  # not a dict. just a link.
+                    if output:  # if we did not get None back.
+                        irc.queueMsg(ircmsgs.privmsg(channel, output))
 
     #####################################################
     # PUBLIC/PRIVATE TRIGGER, MAINLY USED FOR DEBUGGING #
