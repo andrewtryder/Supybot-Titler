@@ -10,12 +10,14 @@
 import re
 import json
 import urllib2
-from BeautifulSoup import BeautifulSoup
-from urlparse import urlparse, parse_qs
 import socket  # capture timeout from socket
 import time
 import sqlite3 as sqlite  # linkdb.
 import os  # linkdb
+import magic  # python-magic
+#from bs4 import BeautifulSoup  # bs4
+from BeautifulSoup import BeautifulSoup
+from urlparse import urlparse, parse_qs
 # extra supybot libs
 import supybot.ircmsgs as ircmsgs
 import supybot.conf as conf
@@ -26,7 +28,7 @@ import supybot.plugins as plugins
 import supybot.ircutils as ircutils
 import supybot.callbacks as callbacks
 from supybot.i18n import PluginInternationalization, internationalizeDocstring
-url_normalize = utils.python.universalImport('local.url_normalize')
+#url_normalize = utils.python.universalImport('local.url_normalize')
 
 _ = PluginInternationalization('Titler')
 
@@ -111,8 +113,8 @@ class Titler(callbacks.Plugin):
         self.longUrlServices = None
         self._getlongurlservices()  # initial fetch.
         # bitly.
-        self.bitlylogin = self.registryValue('bitlyLogin')  # ehunter
-        self.bitlyapikey = self.registryValue('bitlyApiKey')  # R_2aa4785c8c1f87226d329c7cf224a455
+        self.bitlylogin = self.registryValue('bitlyLogin')
+        self.bitlyapikey = self.registryValue('bitlyApiKey')
         # THESE NEED TO BE CHECKED TO MAKE SURE WE HAVE THEM.
         # displayLinkTitles displayImageTitles displayOtherTitles displayShortURL
         # DOMAIN-SPECIFIC PARSING. FORMAT IS: DOMAIN: FUNCTION
@@ -258,15 +260,15 @@ class Titler(callbacks.Plugin):
     # LONGURL FUNCTIONS #
     #####################
 
-    def longurlservices(self, irc, msg, args):
-        """
-        Debug command to test longurl services.
-        """
-
-        irc.reply("longurlcachetime: {0} NOW: {1}".format(self.longUrlCacheTime, time.time()))
-        irc.reply("Services: {0}".format(self._getlongurlservices()))
-
-    longurlservices = wrap(longurlservices)
+    #def longurlservices(self, irc, msg, args):
+    #    """
+    #    Debug command to test longurl services.
+    #    """
+    #
+    #    irc.reply("longurlcachetime: {0} NOW: {1}".format(self.longUrlCacheTime, time.time()))
+    #    irc.reply("Services: {0}".format(self._getlongurlservices()))
+    #
+    #longurlservices = wrap(longurlservices)
 
     def _getlongurlservices(self):
         """Function to maintain list of shorturl services for resolving with cache."""
@@ -338,7 +340,7 @@ class Titler(callbacks.Plugin):
     # MAIN LOGIC FOR FETCHING TITLES #
     ##################################
 
-    def _titledirector(self, url):
+    def _titledirector(self, url, gd=False):
         """Main logic for how to handle links."""
 
         domain = urlparse(url).hostname  # parse out domain.
@@ -355,13 +357,13 @@ class Titler(callbacks.Plugin):
             title = parsemethod(url)
             # if this breaks, should we resort to generic title fetching?
             if not title:
-                title = self._fetchtitle()
+                title = self._fetchtitle(url, gd)
         else:  # we don't have a specific method so resort to generic title fetcher.
-            title = self._fetchtitle(url)
+            title = self._fetchtitle(url, gd)
         # now return the title.
         return title
 
-    def _fetchtitle(self, url):
+    def _fetchtitle(self, url, gd=False):
         """Generic title fetcher for non-domain-specific titles."""
 
         # fetch the url.
@@ -394,6 +396,7 @@ class Titler(callbacks.Plugin):
                 try:
                     import Image
                 except ImportError:
+                    self.log.info("_fetchtitle: ERROR. I did not find PIL or Pillow installed. I cannot process images w/o this.")
                     return None
             # now we need cStringIO.
             from cStringIO import StringIO
@@ -418,14 +421,29 @@ class Titler(callbacks.Plugin):
             soup = BeautifulSoup(content, convertEntities=BeautifulSoup.HTML_ENTITIES, **bsoptions)
             try:  # try to parse w/BS + encode properly.
                 title = self._cleantitle(soup.first('title').string)
-                return title.encode('utf-8', 'ignore')
+                # should we also fetch description?
+                self.log.info("FETCHING TITLE: GD is? {0}".format(gd))
+                if gd:
+                    desc = soup.find('meta', {'name':'description'})
+                    if desc:  # found a description. make sure content is in there.
+                        #self.log.info("DESC IS: {0} TYPE: {1}".format(desc, type(desc)))
+                        if desc.get('content'):
+                            #self.log.info("We're returning with content")
+                            return {'title': title.encode('utf-8', 'ignore'), 'desc': desc['content'].encode('utf-8', 'ignore') }
+                        else:
+                            #self.log.info("Not returning with content.")
+                            return title.encode('utf-8', 'ignore')
+                    else:  # didn't find desc.
+                        #self.log.info("Didnd't find desc")
+                        return title.encode('utf-8', 'ignore')
+                else:  # don't want description, just title.
+                    return title.encode('utf-8', 'ignore')
             except Exception, e:
                 self.log.error("_fetchtitle: ERROR: Could not parse title of: {0} - {1}".format(url, e))
                 return None
         # handle any other filetype using libmagic.
         else:
             try:
-                import magic
                 typeoffile = magic.from_buffer(content)
                 return "Content type: {0}  Size: {1}".format(typeoffile, self._sizefmt(contentdict['size']))
             except Exception, e:  # give a detailed error here in the logs.
@@ -450,40 +468,69 @@ class Titler(callbacks.Plugin):
             fetchShortURL = True
         else:
             fetchShortURL = False
+        # display desc?
+        if self.registryValue('displayDescriptionIfText', channel):
+            displayDesc = True
+        else:
+            displayDesc = False
         # now, work with the above strings and make our calls.
-        # first shorturl/url.
+        # we always want the title. gd will be handled separately.
+        if displayDesc:  # this will return a dict vs a string. we need to handle this properly below.
+            title = self._titledirector(url, gd=True)
+            # now, due to how _fetchtitle works, we don't know how the string will return
+            # due to URL content. we prepare an instance below.
+            if isinstance(title, dict):  # we got a dict back.
+                self.log.info("title brought back: {0}".format(title))
+                if 'desc' in title:
+                    desc = title['desc']
+                else:
+                    self.log.info("_titledirector: Could not find meta-description content for: {0}".format(url))
+                    desc = None
+                # now set title. desc set above.
+                title = title['title']
+            else:  # didn't get a dict back so no desc.
+                desc = None
+            # did not get a dict back.
+        else:  # don't display description.
+            title, desc = self._titledirector(url), None
+
+        # now work wit hthe urls.
         if displayURL:
-            self.log.info("displayurl")
             # first, we determine if we can find the title.
-            title = self._titledirector(url)
             # next, we have to see what the user/channel wants to display.
             if fetchShortURL:
-                self.log.info("fetchshorturl")
+                #self.log.info("fetchshorturl")
                 shorturl = self._shortenurl(url)
                 if not shorturl:  # no shorturl.  lets check the title
-                    self.log.info("fetchshorturl/not outurl")
+                    #self.log.info("fetchshorturl/not outurl")
                     if title:
-                        return "{0} - ".format(url, title)
+                        o = "{0} - {1}".format(url, title)
                     else:  # no shorturl. no title. don't return anything.
-                        return None
+                        o = None
                 else:  # we got the shorturl.
                     if title:  # we have title + shorturl.
-                        return "{0} - {1}".format(shorturl, title)
+                        o = "{0} - {1}".format(shorturl, title)
                     else:  # we have shorturl but no title.
-                        return "{0}".format(shorturl)
+                        o = "{0}".format(shorturl)
             else:  # we don't want the short url but want full. lets check if we have title.
-                self.log.info("not fetchshorturl")
+                #self.log.info("not fetchshorturl")
                 if title:  # display full url + title.
-                    return "{0} - {1}".format(url, title)
+                    o = "{0} - {1}".format(url, title)
                 else:  # don't just repeat displaying the url because we didn't get the title.
-                    return None
+                    o = None
         else:  # we only want the title.
-            self.log.info("not displayurl")
-            title = self._titledirector(url)
+            #self.log.info("not displayurl")
             if not title:  # however, if we don't want url+no title, why return a thing?
-                return None
+                o = None
             else:
-                return "{0}".format(title)
+                o = "{0}".format(title)
+        # now, lets figure out how to return, based on gd.
+        #self.log.info("TITLE IS: {0} O IS: {1} DESC IS: {2}".format(title, o, desc))
+        if desc:  # we have a description.
+            return {'title': o, 'desc': desc}
+        else:  # no gd. just return a string.
+            return o
+
 
     ############################################
     # MAIN TRIGGER FOR URLS PASTED IN CHANNELS #
@@ -527,8 +574,14 @@ class Titler(callbacks.Plugin):
 
         channel = msg.args[0]
         output = self._titler(opturl, channel)
-        # output.
-        irc.reply("Response: {0}".format(output))
+        # now, with gd, we must check what output is.
+        if isinstance(output, dict):  # came back a dict.
+            if 'title' in output:  # we got a title back.
+                irc.reply("TITLE: {0}".format(output['title']))
+            if 'desc' in output:
+                irc.reply("GD: {0}".format(output['desc']))
+        else:
+            irc.reply("Response: {0}".format(output))
 
     titler = wrap(titler, [('text')])
 

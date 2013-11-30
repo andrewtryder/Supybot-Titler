@@ -28,6 +28,8 @@ conf.registerChannelValue(Titler, 'displayURL', registry.Boolean(True, _("""Disp
 conf.registerChannelValue(Titler, 'displayShortURL', registry.Boolean(True, _("""Shorten that URL (must set bitly config)?""")))
 conf.registerChannelValue(Titler, 'displayImageTitles', registry.Boolean(True, _("""Display information about images?""")))
 conf.registerChannelValue(Titler, 'displayOtherTitles', registry.Boolean(True, _("""Display title when we don't know what it is.""")))
+conf.registerChannelValue(Titler, 'displayDescriptionIfText', registry.Boolean(True, _("""If text article is pasted, display a summary if available?""")))
+
 #conf.registerChannelValue(Titler, 'throttlePrinting', registry.Boolean(True, _("""Throttle if we paste more than 2 titles in 10 seconds?""")))
 
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=250:
