@@ -437,19 +437,53 @@ class Titler(callbacks.Plugin):
     # MAIN LOGIC #
     ##############
 
-    def _titler(self, url):
+    def _titler(self, url, channel):
         """This calls the title and url parts of our plugin."""
 
-        # we call each, individually.
-        title = self._titledirector(url)
-        shorturl = self._shortenurl(url)
-        # now handle what comes back.
-        if not title:  # give us something..
-            title = "No title."
-        if not shorturl:  # just repaste the pastedurl.
-            shorturl = url
-        # now return.
-        return "{0} - {1}".format(shorturl, title)
+        # first, we need to figure out user options on what to call.
+        if self.registryValue('displayURL', channel):
+            displayURL = True
+        else:
+            displayURL = False
+        # shorten URL?
+        if self.registryValue('displayShortURL', channel):
+            fetchShortURL = True
+        else:
+            fetchShortURL = False
+        # now, work with the above strings and make our calls.
+        # first shorturl/url.
+        if displayURL:
+            self.log.info("displayurl")
+            # first, we determine if we can find the title.
+            title = self._titledirector(url)
+            # next, we have to see what the user/channel wants to display.
+            if fetchShortURL:
+                self.log.info("fetchshorturl")
+                shorturl = self._shortenurl(url)
+                if not shorturl:  # no shorturl.  lets check the title
+                    self.log.info("fetchshorturl/not outurl")
+                    if title:
+                        return "{0} - ".format(url, title)
+                    else:  # no shorturl. no title. don't return anything.
+                        return None
+                else:  # we got the shorturl.
+                    if title:  # we have title + shorturl.
+                        return "{0} - {1}".format(shorturl, title)
+                    else:  # we have shorturl but no title.
+                        return "{0}".format(shorturl)
+            else:  # we don't want the short url but want full. lets check if we have title.
+                self.log.info("not fetchshorturl")
+                if title:  # display full url + title.
+                    return "{0} - {1}".format(url, title)
+                else:  # don't just repeat displaying the url because we didn't get the title.
+                    return None
+        else:  # we only want the title.
+            self.log.info("not displayurl")
+            title = self._titledirector(url)
+            if not title:  # however, if we don't want url+no title, why return a thing?
+                return None
+            else:
+                return "{0}".format(title)
 
     ############################################
     # MAIN TRIGGER FOR URLS PASTED IN CHANNELS #
@@ -491,9 +525,10 @@ class Titler(callbacks.Plugin):
         Ex: http://www.google.com
         """
 
-        output = self._titler(opturl)
+        channel = msg.args[0]
+        output = self._titler(opturl, channel)
         # output.
-        irc.reply(output)
+        irc.reply("Response: {0}".format(output))
 
     titler = wrap(titler, [('text')])
 
@@ -522,7 +557,6 @@ class Titler(callbacks.Plugin):
         try:
             # we must cleanup the JSONP part.
             lookup = lookup.replace(']);', '').replace('blip_ws_results([', '')
-            self.log.info(lookup)
             data = json.loads(lookup)
             title = data['Post']['title']
             width = data['Post']['media']['width']

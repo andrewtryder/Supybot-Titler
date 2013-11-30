@@ -24,10 +24,10 @@ Titler = conf.registerPlugin('Titler')
 
 conf.registerGlobalValue(Titler, 'bitlyLogin', registry.String('', _("""bitly login"""), private=True))
 conf.registerGlobalValue(Titler, 'bitlyApiKey', registry.String('', _("""bitly key"""), private=True))
-conf.registerChannelValue(Titler, 'displayLinkTitles', registry.Boolean(True, _("""Display link titles?""")))
+conf.registerChannelValue(Titler, 'displayURL', registry.Boolean(True, _("""Display URL with the title?""")))
+conf.registerChannelValue(Titler, 'displayShortURL', registry.Boolean(True, _("""Shorten that URL (must set bitly config)?""")))
 conf.registerChannelValue(Titler, 'displayImageTitles', registry.Boolean(True, _("""Display information about images?""")))
 conf.registerChannelValue(Titler, 'displayOtherTitles', registry.Boolean(True, _("""Display title when we don't know what it is.""")))
-conf.registerChannelValue(Titler, 'displayShortURL', registry.Boolean(True, _("""Pre-pend title with shorturls?""")))
-conf.registerChannelValue(Titler, 'throttlePrinting', registry.Boolean(True, _("""Throttle if we paste more than 2 titles in 10 seconds?""")))
+#conf.registerChannelValue(Titler, 'throttlePrinting', registry.Boolean(True, _("""Throttle if we paste more than 2 titles in 10 seconds?""")))
 
 # vim:set shiftwidth=4 tabstop=4 expandtab textwidth=250:
