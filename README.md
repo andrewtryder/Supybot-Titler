@@ -34,6 +34,9 @@ then supply a dict entry inside of self.domainparsers at top. The format is 'dom
 to fork the code, add in your function, and I'll be happy to merge.
 
 STATUS: Working but I'm sure bugs are present. Try if you want. Submit to me any logs/errors and I'll look at them.
+Also, at the present time, I have the public portion of this disabled. You can easily uncomment this to get it working or
+use the 'titler' command in public or private. This will remain the default until I've reached a point that I feel it's
+stable enough to ship with it on.
 
 Setting up
 ==========
