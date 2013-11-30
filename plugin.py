@@ -321,7 +321,7 @@ class Titler(callbacks.Plugin):
         # don't reshorten bitly links.
         if urlparse(url).hostname in ('bit.ly', 'j.mp', 'bitly.com'):
             return url
-        # otherwise, try to shorten links.
+        # otherwise, try to shorten links. uses legacy v3 api.
         bitlyurl = 'http://api.bitly.com/v3/shorten?login=%s&apiKey=%s&longUrl=%s' % (self.bitlylogin, self.bitlyapikey, url)
         # fetch our url.
         lookup = self._openurl(bitlyurl)
@@ -357,7 +357,7 @@ class Titler(callbacks.Plugin):
             title = parsemethod(url)
             # if this breaks, should we resort to generic title fetching?
             if not title:
-                title = self._fetchtitle(url, gd)
+                title = self._fetchtitle(url, gd=False)
         else:  # we don't have a specific method so resort to generic title fetcher.
             title = self._fetchtitle(url, gd)
         # now return the title.
