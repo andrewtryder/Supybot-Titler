@@ -430,7 +430,8 @@ class Titler(callbacks.Plugin):
                     gd = False
                 baddomains = ['twitter.com']
                 # bad domains.
-                if __builtins__['any'](urlparse(x).hostname in [x for x in baddomains]):
+                urlhostname = urlparse(url).hostname
+                if __builtins__['any'](b in urlhostname for b in baddomains):
                     gd = False
                 if gd:
                     desc = soup.find('meta', {'name':'description'})
