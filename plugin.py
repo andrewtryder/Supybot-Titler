@@ -101,7 +101,7 @@ class LinkDB:
 class Titler(callbacks.Plugin):
     """Titler plugin."""
     threaded = True
-    noIgnore = True
+    noIgnore = False
 
     def __init__(self, irc):
         self.__parent = super(Titler, self)
