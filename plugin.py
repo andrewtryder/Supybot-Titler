@@ -427,7 +427,7 @@ class Titler(callbacks.Plugin):
             try:
                 import magic
                 typeoffile = magic.from_buffer(content)
-                return "Content type: {0}  Size: {1}".format(typeoffile, self.sizefmt(contentdict['size']))
+                return "Content type: {0}  Size: {1}".format(typeoffile, self._sizefmt(contentdict['size']))
             except Exception, e:  # give a detailed error here in the logs.
                 self.log.error("ERROR: _fetchtitle: error trying to parse {0} via other (else) :: {1}".format(url, e))
                 self.log.error("ERROR: _fetchtitle: no handler for {0} at {1}".format(response.info().getheader('Content-Type'), url))
