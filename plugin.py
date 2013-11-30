@@ -423,8 +423,15 @@ class Titler(callbacks.Plugin):
                 title = self._cleantitle(soup.first('title').string)
                 # should we also fetch description?
                 # self.log.info("FETCHING TITLE: GD is? {0}".format(gd))
-                # BLACK/WHITE LIST HERE
-                # https://www.dropbox.com/s/l8blwul6ss6bylh/2013-11-30%2012.06.48.jpeg <- turn off.
+                # BLACK LIST HERE
+                # bad extensions.
+                badexts = ['.jpg', '.jpeg', '.gif', '.png']
+                if __builtins__['any'](url.endswith(x) for x in badexts):
+                    gd = False
+                baddomains = ['twitter.com']
+                # bad domains.
+                if __builtins__['any'](urlparse(x).hostname in [x for x in baddomains]):
+                    gd = False
                 if gd:
                     desc = soup.find('meta', {'name':'description'})
                     if desc:  # found a description. make sure content is in there.
