@@ -40,21 +40,36 @@ Setting up
 
 - 1.) You will need 'python-magic': https://github.com/ahupp/python-magic
 
-    The current stable version of python-magic is available on pypi and can be installed by running pip install python-magic.
+    The current stable version of python-magic is available on pypi and can be installed by running:
+
+        pip install python-magic
 
 - 2.) To shorten links, you will need a Bitly API key (free).
 
     You will need to sign-up for a Bitly API key at http://bitly.com. The plugin needs to have the bitly username and API key
     configured via the configuration variables.
 
+    You then need the login and API key under their "legacy" API. When you're logged in, go here:
+
+    https://bitly.com/a/settings/advanced
+
+    Look for the "Show Legacy API key"
+
+    It will have a login and API key. Configure these into the plugin as such:
+
+    /msg <bot> config plugins.Titler.bitlyLogin LOGIN
+    /msg <bot config plugins.Titler.bitlyApiKey APIKEYHERE
+
+    Now reload the plugin.
+
     Without these, the plugin will just "copy" the long url. You can also disable this functionality where it does not shorten
     URLs and/or show any urls, just titles (if found).
 
-- Third, you might already have PIL installed but I recommend ditching it for the newer Python Imaging Library called "Pillow":
+- 3.) You might already have PIL installed but I recommend ditching it for the newer Python Imaging Library called "Pillow":
 
     pip install Pillow
 
-- If you're already using ShrinkURL and Web, disable their overlapping features.
+- 4.) If you're already using ShrinkURL and Web, disable their overlapping features.
 
     /msg <bot> plugins.ShrinkUrl.shrinkSnarfer False
     /msg <bot> plugins.Web.titleSnarfer False
