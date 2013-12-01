@@ -173,11 +173,15 @@ class Titler(callbacks.Plugin):
     # HTTP HELPER FUNCTIONS #
     #########################
 
-    def _openurl(self, url, urlread=True):
+    def _openurl(self, url, urlread=True, headers=None):
         """Generic http fetcher we can use here."""
 
         opener = urllib2.build_opener()
-        opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
+        if headers:
+            opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
+            opener.addheaders.append(headers)
+        else:
+            opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
         # big try except block and error handling for each.
         self.log.info("_openurl: Trying to open: {0}".format(url))
         try:
@@ -712,43 +716,56 @@ class Titler(callbacks.Plugin):
     def _imgur(self, url):
         """Try and query imgur's API for image information."""
 
-        query = urlparse(url)
-        # query.path will come in with something like fF7lnms or .json
-        # for imgur.com/gallery/fF7lnms.json
-        pathname = query.path
+        pathname = urlparse(url).path
+        # urls look like this:
+        # http://i.imgur.com/sAqSvpw.gif
+        # http://i.imgur.com/sAqSvpw
+        # http://imgur.com/gallery/8knRayb
         # make sure we have a pathname.
         if not pathname or pathname == '':
-            self.log.error("_gist: ERROR: could not determine pathname from: {0}".format(url))
+            self.log.error("_imgur: ERROR: could not determine pathname from: {0}".format(url))
             return None
-        # we have our path so lets clean it up.
-        imgurid = pathname.split('.')[0]
-        # now that we have our imgurid, lets try and query the API.
-        imgururl = 'http://imgur.com/gallery%s.json' % imgurid
+        else:  # worked. remove leading /
+            pathname = pathname[1:]
+        # now, lets attempt to find our imgur id.
+        pathnamesplit = pathname.split('/')
+        splitlen = len(pathnamesplit)
+        # now check based on the splitlen.
+        if splitlen == 1:  # this means we should have the id right in here.
+            imgurid = pathnamesplit[0].split('.')[0]  # also will work if someone pastes the .gif/.jpg
+        elif splitlen == 2:  # handles gallery/8knRayb
+            imgurid = pathnamesplit[1]
+        else:
+            self.log.error("_imgur: ERROR: could not determine imgurid from: {0}".format(url))
+            return None
+        # now that we have our imgurid, lets look it up.
+        apiurl = 'https://api.imgur.com/3/image/%s' % imgurid
         # fetch our url.
-        lookup = self._openurl(imgururl)
+        lookup = self._openurl(apiurl, headers=("Authorization", "Client-ID 7d8ffc64d6e9e78"))
         if not lookup:
-            self.log.error("_shortenurl: could not fetch: {0}".format(url))
+            self.log.error("_imgur: could not fetch API url: {0}".format(apiurl))
             return None
         # now lets process the json.
         try:
             data = json.loads(lookup)
-            title = data['data']['image']['title']
-            size = data['data']['image']['size']  # size in B.
-            views = data['data']['image']['views']
-            mimetype = data['data']['image']['mimetype']
-            width = data['data']['image']['width']  # int
-            height = data['data']['image']['height']  # int
-            upvotes = data['data']['image']['ups']  # int
-            downvotes = data['data']['image']['downs']  # int
-            nsfw = data['data']['image']['nsfw']  # true | false
-            is_album = data['data']['image']['is_album']  # true | false
+            title = data['data']['title']
+            size = self._sizefmt(data['data']['size'])  # size in B.
+            views = data['data']['views']
+            mimetype = data['data']['type']
+            width = data['data']['width']  # int
+            height = data['data']['height']  # int
+            #upvotes = data['data']['image']['ups']  # int
+            #downvotes = data['data']['image']['downs']  # int
+            nsfw = data['data']['nsfw']  # true | false
+            animated = data['data']['animated']
+            # check for animation
+            if animated:
+                mimetype = "{0} [ANIMATED]".format(mimetype)
             # now lets format the string to return.
-            o = "{0} - Views: {1} - MIME: {2} - Size: {3}x{4}({5}) - Votes: +{6}/-{7}".format(title, views, mimetype, width, height, self._sizefmt(size), upvotes, downvotes)
-            # be cheap to add album/nsfw on.
-            if nsfw == "true":
+            o = "{0} - Views: {1} - MIME: {2} - Size: {3}x{4}({5})".format(title, views, mimetype, width, height, size)
+            # be cheap to add nsfw on.
+            if nsfw:
                 o = "{0} - {1}".format(o, self._bu("NSFW"))
-            if is_album == "true":
-                o = "{0} - {1}".format(o, self._bold("[ALBUM]"))
             # finally, return our string.
             return o
         except Exception, e:
