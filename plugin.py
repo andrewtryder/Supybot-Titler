@@ -125,8 +125,8 @@ class Titler(callbacks.Plugin):
             'www.youtube.com': '_yttitle',
             'youtube.com': '_yttitle',
             'youtu.be': '_yttitle',
-            'i.imgur.com': '_imgur',
-            'imgur.com': '_imgur',
+            #'i.imgur.com': '_imgur',
+            #'imgur.com': '_imgur',
             'gist.github.com': '_gist',
             'www.dailymotion.com': '_dmtitle',
             'dailymotion.com': '_dmtitle',
@@ -556,6 +556,9 @@ class Titler(callbacks.Plugin):
         # linkdb = LinkDB()   # disable for now.
         # linkdb.add(url, title, channel, user)
 
+        # first, check if we should be 'disabled' in this channel.
+        if self.registryValue('disableChannel', channel):
+            return
         # don't react to non-ACTION based messages.
         if ircmsgs.isCtcp(msg) and not ircmsgs.isAction(msg):
             return
@@ -719,8 +722,10 @@ class Titler(callbacks.Plugin):
         pathname = urlparse(url).path
         # urls look like this:
         # http://i.imgur.com/sAqSvpw.gif
-        # http://i.imgur.com/sAqSvpw
+        # http://i.imgur.com/sAqSvpw  <single>
         # http://imgur.com/gallery/8knRayb
+        # http://imgur.com/gallery/fcUcS <multi>
+        # how do we know if it's an album or image?
         # make sure we have a pathname.
         if not pathname or pathname == '':
             self.log.error("_imgur: ERROR: could not determine pathname from: {0}".format(url))
@@ -739,7 +744,7 @@ class Titler(callbacks.Plugin):
             self.log.error("_imgur: ERROR: could not determine imgurid from: {0}".format(url))
             return None
         # now that we have our imgurid, lets look it up.
-        apiurl = 'https://api.imgur.com/3/image/%s' % imgurid
+        apiurl = 'http://api.imgur.com/3/album/%s' % imgurid
         # fetch our url.
         lookup = self._openurl(apiurl, headers=("Authorization", "Client-ID 7d8ffc64d6e9e78"))
         if not lookup:
@@ -749,23 +754,18 @@ class Titler(callbacks.Plugin):
         try:
             data = json.loads(lookup)
             title = data['data']['title']
-            size = self._sizefmt(data['data']['size'])  # size in B.
-            views = data['data']['views']
-            mimetype = data['data']['type']
-            width = data['data']['width']  # int
-            height = data['data']['height']  # int
-            #upvotes = data['data']['image']['ups']  # int
-            #downvotes = data['data']['image']['downs']  # int
-            nsfw = data['data']['nsfw']  # true | false
-            animated = data['data']['animated']
-            # check for animation
-            if animated:
-                mimetype = "{0} [ANIMATED]".format(mimetype)
+            desc = data['data']['description']
+            uploaded = data['data']['datetime']  # epoch
+            views = data['data']['views']  # int
+            upvotes = data['data']['ups']  # int
+            downvotes = data['data']['downs']  # int
+            images = data['data']['images_count']  # int
+            is_album = data['data']['is_album']  # true | false
             # now lets format the string to return.
-            o = "{0} - Views: {1} - MIME: {2} - Size: {3}x{4}({5})".format(title, views, mimetype, width, height, size)
+            o = "{0} - {1} - Views: {2} - Uploaded: {3} - Images: {4} - +{5}/-{6}".format(title, desc, views, uploaded, images, upvotes, downvotes)
             # be cheap to add nsfw on.
-            if nsfw:
-                o = "{0} - {1}".format(o, self._bu("NSFW"))
+            if is_album:
+                o = "{0} - {1}".format(o, self._bu("ALBUM"))
             # finally, return our string.
             return o
         except Exception, e:

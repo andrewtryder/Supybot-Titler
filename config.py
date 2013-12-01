@@ -24,6 +24,7 @@ Titler = conf.registerPlugin('Titler')
 
 conf.registerGlobalValue(Titler, 'bitlyLogin', registry.String('', _("""bitly login"""), private=True))
 conf.registerGlobalValue(Titler, 'bitlyApiKey', registry.String('', _("""bitly key"""), private=True))
+conf.registerChannelValue(Titler, 'disableChannel', registry.Boolean(False, _("""Disable all functionality in a certain channel?""")))
 conf.registerChannelValue(Titler, 'displayURL', registry.Boolean(True, _("""Display URL with the title?""")))
 conf.registerChannelValue(Titler, 'displayShortURL', registry.Boolean(True, _("""Shorten that URL (must set bitly config)?""")))
 conf.registerChannelValue(Titler, 'displayImageTitles', registry.Boolean(True, _("""Display information about images?""")))
