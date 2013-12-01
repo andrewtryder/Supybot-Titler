@@ -15,6 +15,7 @@ import time
 import sqlite3 as sqlite  # linkdb.
 import os  # linkdb
 import magic  # python-magic
+import zlib  # gzipped content.
 #from bs4 import BeautifulSoup  # bs4
 from BeautifulSoup import BeautifulSoup
 from urlparse import urlparse, parse_qs
@@ -379,6 +380,14 @@ class Titler(callbacks.Plugin):
         content = response.read(100*1024*1024)
         # dict for handling/output.
         bsoptions = {}
+        # handle gzip, if present. decompress it.
+        if "Content-Encoding" in response.info() and response.info()["Content-Encoding"] == "gzip":
+            try:  # we never know if this won't work/breaks.
+                gunzip_obj = zlib.decompressobj(16+zlib.MAX_WBITS)
+                content = gunzip_obj.decompress(content)
+            except Exception, e:  # if something breaks, just pass and it will spit out gzip compressed data.
+                self.log.error("_fetchtitle: ERROR decompressing (gzip) :: {0} :: {1}".format(url, e))
+                pass
         # get the "charset"
         charset = response.info().getheader('Content-Type').split('charset=')
         if len(charset) == 2:
@@ -425,9 +434,7 @@ class Titler(callbacks.Plugin):
             soup = BeautifulSoup(content, convertEntities=BeautifulSoup.HTML_ENTITIES, **bsoptions)
             try:  # try to parse w/BS + encode properly.
                 title = self._cleantitle(soup.first('title').string)
-                # should we also fetch description?
-                # self.log.info("FETCHING TITLE: GD is? {0}".format(gd))
-                # BLACK LIST HERE
+                # should we also fetch description? We have specific things to NOT fetch.
                 # bad extensions.
                 badexts = ['.jpg', '.jpeg', '.gif', '.png']
                 if __builtins__['any'](url.endswith(x) for x in badexts):
@@ -452,6 +459,7 @@ class Titler(callbacks.Plugin):
                         return title.encode('utf-8', 'ignore')
                 else:  # don't want description, just title.
                     return title.encode('utf-8', 'ignore')
+                # now take the the possible 'title and 'gd' above and return.
             except Exception, e:
                 self.log.error("_fetchtitle: ERROR: Could not parse title of: {0} - {1}".format(url, e))
                 return None
@@ -538,6 +546,7 @@ class Titler(callbacks.Plugin):
                 o = None
             else:
                 o = "{0}".format(title)
+        # IDEA: should we have a config to limit max title length?
         # now, lets figure out how to return, based on gd.
         #self.log.info("TITLE IS: {0} O IS: {1} DESC IS: {2}".format(title, o, desc))
         if desc:  # we have a description.
