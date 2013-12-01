@@ -16,6 +16,7 @@ import sqlite3 as sqlite  # linkdb.
 import os  # linkdb
 import magic  # python-magic
 import zlib  # gzipped content.
+import re  # regex for matching urls.
 #from bs4 import BeautifulSoup  # bs4
 from BeautifulSoup import BeautifulSoup
 from urlparse import urlparse, parse_qs
@@ -349,15 +350,9 @@ class Titler(callbacks.Plugin):
         """Main logic for how to handle links."""
 
         domain = urlparse(url).hostname  # parse out domain.
-        # first, check if our link is inside a shortener. fetch real url.
-        if domain in self.longUrlServices or domain == 'pic.twitter.com':
-            realurl = self._longurl(url)  # try to expand it back to normal.
-            if realurl:  # if we get something back.
-                domain = urlparse(realurl).hostname  # parse the new domain.
-                url = realurl  # use the realurl.
         #self.log.info(url)
         # put a handler per domain(s)
-        if domain in self.domainparsers:
+        if domain in self.domainparsers:  # fetches the k (domain) v is function.
             parsemethod = getattr(self, self.domainparsers[domain])
             title = parsemethod(url)
             # if this breaks, should we resort to generic title fetching?
@@ -439,7 +434,7 @@ class Titler(callbacks.Plugin):
                 badexts = ['.jpg', '.jpeg', '.gif', '.png']
                 if __builtins__['any'](url.endswith(x) for x in badexts):
                     gd = False
-                baddomains = ['twitter.com', 'panoramio.com']
+                baddomains = ['twitter.com', 'panoramio.com', 'kickass.to']
                 # bad domains.
                 urlhostname = urlparse(url).hostname
                 if __builtins__['any'](b in urlhostname for b in baddomains):
@@ -496,6 +491,13 @@ class Titler(callbacks.Plugin):
         else:
             displayDesc = False
         # now, work with the above strings and make our calls.
+        # before we do anything, if a "shortened" link is pasted, we have to "expand" (or try) it.
+        domain = urlparse(url).hostname  # parse out domain.
+        # first, check if our link is inside a shortener. fetch real url.
+        if domain in self.longUrlServices:
+            expandedurl = self._longurl(url)  # try to expand it back to normal.
+            if expandedurl:  # we got the expanded url back.
+                url = expandedurl  # use the realurl.
         # we always want the title. gd will be handled separately.
         if displayDesc:  # this will return a dict vs a string. we need to handle this properly below.
             title = self._titledirector(url, gd=True)
@@ -577,7 +579,13 @@ class Titler(callbacks.Plugin):
             else:
                 text = msg.args[1]
             # find all urls pasted.
+            #urlpattern = """(((http|ftp|https|ftps|sftp)://)|(www\.))+(([a-zA-Z
+            #                0-9\._-]+\.[a-zA-Z]{2,6})|([0-9]{1,3}\.[0-9]{1,3}\.
+            #                [0-9]{1,3}\.[0-9]{1,3}))(/[a-zA-Z0-9\&amp;%_\./-~-]*)?"""
+            # extracts links in text and stores in an iterator.
+            #matches = re.finditer(urlpattern, text.strip(), re.IGNORECASE + re.VERBOSE)
             for url in utils.web.urlRe.findall(text):
+            #for url in matches:
                 # url = self._tidyurl(url)  # should we tidy them?
                 output = self._titler(url, channel)
                 # now, with gd, we must check what output is.
