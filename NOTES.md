@@ -14,3 +14,4 @@ https://github.com/rubinlinux/supybot-twitter/blob/master/plugin.py
 https://github.com/Erika-Mustermann/Limnoria/blob/master/plugins/Web/plugin.py
 https://github.com/Suwako/Naoko/blob/2bc130d88fa675ff4d2aca708dcb096aeb3995d6/naoko/lib/apiclient.py
 
+https://github.com/m13253/titlebot/blob/master/titlebot.py
