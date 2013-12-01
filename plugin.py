@@ -176,7 +176,9 @@ class Titler(callbacks.Plugin):
     def _openurl(self, url, urlread=True, headers=None):
         """Generic http fetcher we can use here."""
 
-        opener = urllib2.build_opener()
+        # build the urllib2 object.
+        opener = urllib2.build_opener(urllib2.HTTPCookieProcessor)
+        # check if we got headers in the call.
         if headers:
             opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
             opener.addheaders.append(headers)
@@ -432,7 +434,7 @@ class Titler(callbacks.Plugin):
                 badexts = ['.jpg', '.jpeg', '.gif', '.png']
                 if __builtins__['any'](url.endswith(x) for x in badexts):
                     gd = False
-                baddomains = ['twitter.com']
+                baddomains = ['twitter.com', 'panoramio.com']
                 # bad domains.
                 urlhostname = urlparse(url).hostname
                 if __builtins__['any'](b in urlhostname for b in baddomains):
