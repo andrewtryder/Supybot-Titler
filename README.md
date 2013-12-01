@@ -10,6 +10,11 @@ plugins and I've found a varying degree of bugs, along with some that aren't upd
 
 Titler aims to solve this problem.
 
+To give credit to some in the past, Detroll: https://github.com/jtatum/Detroll/ was one of my bigger
+inspirations but the plugin has an entirely different life of its own from there. I also credit many of
+the similar plugins for Supybot and other bots out there with ideas for different sites and strategies for
+attacking the "link title on irc" issue many try to solve.
+
 I developed a modular way to "plug-in" functions that will aid in the display of specific links. With
 the number of sites that have public APIs out there, it's not hard to parse a link and then make a simple
 API call to yield additional information about a link. Examples of this can be found in my own YouTube
@@ -61,6 +66,8 @@ Setting up
     /msg <bot config plugins.Titler.bitlyApiKey APIKEYHERE
 
     Now reload the plugin.
+
+    NOTE: You can also control a bit of the functionality from links that spit out here under settings such as the domain (j.mp vs bit.ly)
 
     Without these, the plugin will just "copy" the long url. You can also disable this functionality where it does not shorten
     URLs and/or show any urls, just titles (if found).
