@@ -178,12 +178,10 @@ class Titler(callbacks.Plugin):
 
         # build the urllib2 object.
         opener = urllib2.build_opener(urllib2.HTTPCookieProcessor)
+        opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
         # check if we got headers in the call.
         if headers:
-            opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
             opener.addheaders.append(headers)
-        else:
-            opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
         # big try except block and error handling for each.
         self.log.info("_openurl: Trying to open: {0}".format(url))
         try:
