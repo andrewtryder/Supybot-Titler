@@ -133,7 +133,8 @@ class Titler(callbacks.Plugin):
             'www.dailymotion.com': '_dmtitle',
             'dailymotion.com': '_dmtitle',
             'www.blip.tv': '_bliptitle',
-            'blip.tv': '_bliptitle'
+            'blip.tv': '_bliptitle',
+            'vine.co': '_vinetitle'
             }
 
     def die(self):
@@ -626,6 +627,29 @@ class Titler(callbacks.Plugin):
     # INDIVIDUAL DOMAIN PARSERS WITH API  #
     # (SEE README FOR HOW TO CODE MORE)   #
     #######################################
+
+    def _vinetitle(self, url):
+        """Fetch information about vine videos."""
+
+        # <meta property="twitter:title" content="Only The Best Vines's post on Vine">
+        # <meta property="twitter:description" content="Did that really just happen?!?😂😂">
+        # we do a regular http fetch here.
+        lookup = self._openurl(url)
+        if not lookup:
+            self.log.error("_vinetitle: could not fetch: {0}".format(url))
+            return None
+        # soup it.
+        soup = BeautifulSoup(lookup, convertEntities=BeautifulSoup.HTML_ENTITIES)
+        desc = soup.find('meta', {'property':'twitter:description'})
+        if not desc:
+            return None
+        else:
+            if desc.get('content'):
+                o = desc['content'].encode('utf-8', 'ignore')
+            else:
+                return None
+        # now return.
+        return "Vine Video: {0}".format(o)
 
     def _bliptitle(self, url):
         """Fetch information for blip.tv"""
