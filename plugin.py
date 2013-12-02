@@ -435,11 +435,13 @@ class Titler(callbacks.Plugin):
                 badexts = ['.jpg', '.jpeg', '.gif', '.png']
                 if __builtins__['any'](url.endswith(x) for x in badexts):
                     gd = False
-                baddomains = ['twitter.com', 'panoramio.com', 'kickass.to', 'tinypic.com']
-                # bad domains.
-                urlhostname = urlparse(url).hostname
-                if __builtins__['any'](b in urlhostname for b in baddomains):
-                    gd = False
+                else:
+                    baddomains = ['twitter.com', 'panoramio.com', 'kickass.to', 'tinypic.com', 'ebay.com']
+                    # bad domains.
+                    urlhostname = urlparse(url).hostname
+                    if __builtins__['any'](b in urlhostname for b in baddomains):
+                        gd = False
+                # check if we should "get description" (GD)
                 if gd:
                     desc = soup.find('meta', {'name':'description'})
                     if desc:  # found a description. make sure content is in there.
