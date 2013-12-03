@@ -436,7 +436,7 @@ class Titler(callbacks.Plugin):
                 if __builtins__['any'](url.endswith(x) for x in badexts):
                     gd = False
                 else:
-                    baddomains = ['twitter.com', 'panoramio.com', 'kickass.to', 'tinypic.com', 'ebay.com']
+                    baddomains = ['twitter.com', 'panoramio.com', 'kickass.to', 'tinypic.com', 'ebay.com', 'imgur.com']
                     # bad domains.
                     urlhostname = urlparse(url).hostname
                     if __builtins__['any'](b in urlhostname for b in baddomains):
