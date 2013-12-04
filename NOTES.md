@@ -15,3 +15,54 @@ https://github.com/Erika-Mustermann/Limnoria/blob/master/plugins/Web/plugin.py
 https://github.com/Suwako/Naoko/blob/2bc130d88fa675ff4d2aca708dcb096aeb3995d6/naoko/lib/apiclient.py
 
 https://github.com/m13253/titlebot/blob/master/titlebot.py
+
+IDEA/CODE for amazon plugin.
+- A friend suggested this but I find it's too difficult for people to implement.
+- My understanding is that Amazon also is 'random' in the information returned on each item, so a plugin could be challenging.
+- Here is scratch code that works
+
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import hmac
+from hashlib import sha256
+import base64
+import urllib
+import urllib2
+import time
+
+AWS_SECRET_KEY = ''
+
+kwargs = {}
+kwargs['Timestamp'] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+kwargs['Operation'] = "ItemLookup"
+kwargs['Version'] = "2011-08-01"
+kwargs['AWSAccessKeyId'] = ''
+kwargs['Service'] = "AWSECommerceService"
+kwargs['ItemId'] = 'B00008OE6I'
+kwargs['AssociateTag'] = '' # https://affiliate-program.amazon.com/gp/associates/network/main.html
+kwargs['MerchantId'] = 'All'
+kwargs['Condition'] = 'All'
+kwargs['IncludeReviewsSummary'] = 'True'
+kwargs['ResponseGroup'] = 'ItemAttributes,OfferSummary'
+# ['Request','ItemIds','Small','Medium','Large','Offers','OfferFull','OfferSummary',
+# 'OfferListings','PromotionSummary','PromotionDetails','Variations','VariationImages',
+# 'VariationMinimum','VariationSummary','TagsSummary','Tags','VariationMatrix','VariationOffers',
+# 'ItemAttributes','MerchantItemAttributes','Tracks','Accessories','EditorialReview','SalesRank',
+# 'BrowseNodes','Images','Similarities','Subjects','Reviews','ListmaniaLists','SearchInside',
+# 'PromotionalTag','AlternateVersions','Collections','ShippingCharges','RelatedItems','ShippingOptions'].
+service_domain = 'ecs.amazonaws.com'
+# = 'xml-us.amznxslt.com'
+keys = sorted(kwargs.keys())
+quoted_strings = "&".join("%s=%s" % (k, urllib.quote(unicode(kwargs[k]).encode('utf-8'), safe = '~')) for k in keys)
+data = "GET\n" + service_domain + "\n/onca/xml\n" + quoted_strings
+digest = hmac.new(AWS_SECRET_KEY, data, sha256).digest()
+signature = urllib.quote(base64.b64encode(digest))
+api_string = "http://" + service_domain + "/onca/xml?" + quoted_strings + "&Signature=%s" % signature
+api_request = urllib2.Request(api_string) #, headers={"Accept-Encoding": "gzip"})
+response = urllib2.urlopen(api_request)
+response_text = response.read()
+
+print type(response_text)
+print response_text
+
