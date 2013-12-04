@@ -134,7 +134,9 @@ class Titler(callbacks.Plugin):
             'dailymotion.com': '_dmtitle',
             'www.blip.tv': '_bliptitle',
             'blip.tv': '_bliptitle',
-            'vine.co': '_vinetitle'
+            'vine.co': '_vinetitle',
+            'reddit.com': '_reddit',
+            'www.reddit.com': '_reddit'
             }
 
     def die(self):
@@ -629,6 +631,104 @@ class Titler(callbacks.Plugin):
     # INDIVIDUAL DOMAIN PARSERS WITH API  #
     # (SEE README FOR HOW TO CODE MORE)   #
     #######################################
+
+    def _reddit(self, url):
+        """Handle finding titles for reddit links."""
+
+        # REDDIT THREAD
+        # http://www.reddit.com/r/whowouldwininafight/comments/1rwrff/walter_white_breaking_bad_vs_jax_teller_sons_of/
+        # http://api.reddit.com/r/whowouldwininafight/comments/1rwrff.json
+        # USERNAMES
+        # http://www.reddit.com/user/Darthdre758
+        # http://api.reddit.com/user/Darthdre758/about.json
+        # SUBREDDIT
+        # http://api.reddit.com/r/subreddit/about.json
+        # http://www.reddit.com/r/Sonsofanarchy/
+        # COMMENT?
+        # http://www.reddit.com/r/Sonsofanarchy/comments/1s29lh/spoiler_something_i_noticed_during_tonights/cdt7869
+        pathname = urlparse(url).path
+        # make sure we have a pathname.
+        if not pathname or pathname == '/' or pathname == '':
+            self.log.error("_reddit: ERROR: could not determine pathname from: {0}".format(url))
+            return None
+        else:  # strip the leading /.
+            pathname = pathname[1:]
+            if pathname.endswith('/'):  # also remove tailing if present.
+                pathname = pathname[:-1]
+        # now, lets break it up by /
+        pathnamesplit = pathname.split('/')
+        # determine what api/calls to use now based on this. instead of a general api handler, we do a call from within.
+        self.log.info("PATHNANMESPLIT: {0}".format(pathnamesplit))
+        if pathnamesplit[0] == "r":  # subreddit or comment to one.
+            subreddit = pathnamesplit[1]
+            # now, we must determine if a user pasted a subreddit or a link to a post within one.
+            if len(pathnamesplit) == 2:  # top level subreddit.
+                # make our api call now.
+                apiurl = 'http://api.reddit.com/r/%s/about.json' % subreddit
+                lookup = self._openurl(apiurl)
+                if not lookup:
+                    self.log.error("_reddit: could not fetch API URL: {0}".format(apiurl))
+                    return None
+                # process the json.
+                try:
+                    data = json.loads(lookup)
+                    # self.log.info("DATA: {0}".format(data))
+                    title = data['data']['title']  # str.
+                    desc = data['data']['public_description']  # str.
+                    subs = self._numfmt(data['data']['subscribers'])  # int.
+                    created = data['data']['created_utc']
+                    o = "subreddit: {0} - {1} - subscribers: {2} - created: {3}".format(title, desc, subs, created)
+                    return o
+                except Exception, e:  # something broke.
+                    self.log.error("_reddit: could not process JSON from API URL: {0} :: {1}".format(apiurl, e))
+                    return None
+            elif len(pathnamesplit) == 5:  # direct comment to.
+                commentid = pathnamesplit[3]
+                # make our api call now.
+                apiurl = 'http://api.reddit.com/r/%s/comments/%s.json' % (subreddit, commentid)
+                lookup = self._openurl(apiurl)
+                if not lookup:
+                    self.log.error("_reddit: could not fetch API URL: {0}".format(apiurl))
+                    return None
+                # process the json.
+                try:
+                    data = json.loads(lookup)
+                    #author = data['data']['children'][0]['data']['author']
+                    title = data[0]['data']['children'][0]['data']['title']
+                    comments = self._numfmt(data[0]['data']['children'][0]['data']['num_comments'])
+                    score = data[0]['data']['children'][0]['data']['score']
+                    created = data[0]['data']['children'][0]['data']['created_utc']
+                    o = "subreddit: {0} - {1} - comments: {2} - score: {3} - created: {4}".format(subreddit, title, comments, score, created)
+                    return o
+                except Exception, e:  # something broke.
+                    self.log.error("_reddit: could not process JSON from API URL: {0} :: {1}".format(apiurl, e))
+                    return None
+            else:  # can't determine.
+                self.log.error("_reddit: ERROR: could not determine what API to use from: {0}".format(url))
+                return None
+        elif pathnamesplit[0] == "user":  # someone pasted a link to a user.
+            username = pathnamesplit[1]
+            # make our api call now.
+            apiurl = 'http://api.reddit.com/user/%s/about.json' % username
+            lookup = self._openurl(apiurl)
+            if not lookup:
+                self.log.error("_reddit: could not fetch API URL: {0}".format(apiurl))
+                return None
+            # process the json.
+            try:
+                data = json.loads(lookup)
+                created = data['data']['created_utc']  # UTC.
+                linkkarma = data['data']['link_karma']  # int.
+                commentkarma = data['data']['comment_karma']  # int.
+                # is_mod = data['data']['is_mod']
+                o = "reddit user: {0} KARMA: link {1}/comment {2} signed up: {3}".format(username, linkkarma, commentkarma, created)
+                return o
+            except Exception, e:  # something broke.
+                self.log.error("_reddit: could not process JSON from API URL: {0} :: {1}".format(apiurl, e))
+                return None
+        else:  # we don't have a condition for this url. return None.
+            self.log.error("_reddit: ERROR: could not determine what API to use from: {0}".format(url))
+            return None
 
     def _vinetitle(self, url):
         """Fetch information about vine videos."""
