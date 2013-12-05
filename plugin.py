@@ -374,8 +374,28 @@ class Titler(callbacks.Plugin):
         if not response:  # make sure we have a resposne.
             self.log.error("_fetchtitle: no response from: {0}".format(url))
             return None
+        # parse content
         # now lets process the first 100k.
         content = response.read(100*1024*1024)
+        # before we do anything, lets figure out redirects.
+        # first and foremost, we must handle meta redirects. urllib2 handles 301/302 fine but not meta.
+        RE_REFRESH_TAG = re.compile(r'<meta[^>]+http-equiv\s*=\s*["\']*Refresh[^>]+', re.I)
+        RE_REFRESH_URL = re.compile(r'url=["\']*([^\'"> ]+)', re.I)
+        # now test. this can probably be improved below.
+        match = RE_REFRESH_TAG.search(content)
+        if match:
+            match = RE_REFRESH_URL.search(match.group(0))
+            if match:
+                newurl =  match.group(1)
+                # we're here if we did find a redirect.
+                response = self._openurl(newurl, urlread=False)
+                if not response:  # make sure we have a resposne.
+                    self.log.error("_fetchtitle: no response from: {0} (Redirected from: {1})".format(url, newurl))
+                    return None
+                else:  # copy the new (redirected url) back to the old url string.
+                    url = newurl
+                    content = response.read(100*1024*1024)
+        # now begin regular processing.
         # dict for handling/output.
         bsoptions = {}
         # handle gzip, if present. decompress it.
@@ -429,8 +449,10 @@ class Titler(callbacks.Plugin):
             return "Image type: {0}  Dimensions: {1}x{2}  Size: {3}".format(imgformat, im.size[0], im.size[1], self._sizefmt(contentdict['size']))
         # if it is text, we try to just scrape the title out.
         elif contentdict['type'].startswith('text/'):
-            soup = BeautifulSoup(content, convertEntities=BeautifulSoup.HTML_ENTITIES, **bsoptions)
+            # wrap the whole thing because who the hell knows wtf will happen.
             try:  # try to parse w/BS + encode properly.
+                soup = BeautifulSoup(content, convertEntities=BeautifulSoup.HTML_ENTITIES, **bsoptions)
+                #self.log.info("{0}".format(soup))
                 title = self._cleantitle(soup.first('title').string)
                 # should we also fetch description? We have specific things to NOT fetch.
                 # bad extensions.
@@ -561,7 +583,6 @@ class Titler(callbacks.Plugin):
         else:  # no gd. just return a string.
             return o
 
-
     ############################################
     # MAIN TRIGGER FOR URLS PASTED IN CHANNELS #
     ############################################
@@ -594,13 +615,15 @@ class Titler(callbacks.Plugin):
                 # url = self._tidyurl(url)  # should we tidy them?
                 output = self._titler(url, channel)
                 # now, with gd, we must check what output is.
-                if isinstance(output, dict):  # came back a dict.
-                    if 'title' in output and output['title']:  # we got a title back and is not None.
-                        irc.queueMsg(ircmsgs.privmsg(channel, "{0}".format(output['title'])))
-                    if 'desc' in output and output['desc']:  # we get a desc back and is not None.
-                        irc.queueMsg(ircmsgs.privmsg(channel, "{0}".format(output['desc'])))
-                else:  # not a dict. just a link.
-                    if output:  # if we did not get None back.
+                if output:  # if we did not get None back.
+                    if isinstance(output, dict):  # came back a dict.
+                        if 'title' in output:
+                            irc.sendMsg(ircmsgs.privmsg(channel, "{0}".format(output['title'])))
+                            if 'desc' in output:
+                                irc.sendMsg(ircmsgs.privmsg(channel, "{0}".format(output['desc'])))
+                        #for v in sorted(output.values(), reverse=True):
+                        #    irc.queueMsg(ircmsgs.privmsg(channel, "{0}".format(v)))
+                    else:  # not a dict. just the title part (no gd)
                         irc.queueMsg(ircmsgs.privmsg(channel, output))
 
     #####################################################
@@ -617,13 +640,14 @@ class Titler(callbacks.Plugin):
         channel = msg.args[0]
         output = self._titler(opturl, channel)
         # now, with gd, we must check what output is.
-        if isinstance(output, dict):  # came back a dict.
-            if 'title' in output:  # we got a title back.
-                irc.reply("TITLE: {0}".format(output['title']))
-            if 'desc' in output:
-                irc.reply("GD: {0}".format(output['desc']))
-        else:
-            irc.reply("Response: {0}".format(output))
+        if output:  # if we did not get None back.
+            if isinstance(output, dict):  # came back a dict.
+                if 'title' in output:  # we got a title back.
+                    irc.reply("TITLE: {0}".format(output['title']))
+                    if 'desc' in output:
+                        irc.reply("GD: {0}".format(output['desc']))
+            else:
+                irc.reply("Response: {0}".format(output))
 
     titler = wrap(titler, [('text')])
 
