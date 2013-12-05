@@ -7,18 +7,16 @@
 ###
 
 # my libs.
-import re
-import json
-import urllib2
-import socket  # capture timeout from socket
-import time
+import re  # regex for matching urls.
+import json  # json for APIs.
+import requests  # http stuff.
+import time  # longurl cache.
 import sqlite3 as sqlite  # linkdb.
 import os  # linkdb
 import magic  # python-magic
-import zlib  # gzipped content.
-import re  # regex for matching urls.
-#from bs4 import BeautifulSoup  # bs4
-from BeautifulSoup import BeautifulSoup
+from cStringIO import StringIO  # images.
+from bs4 import BeautifulSoup  # bs4
+#from BeautifulSoup import BeautifulSoup
 from urlparse import urlparse, parse_qs
 # extra supybot libs
 import supybot.ircmsgs as ircmsgs
@@ -181,29 +179,22 @@ class Titler(callbacks.Plugin):
     def _openurl(self, url, urlread=True, headers=None):
         """Generic http fetcher we can use here."""
 
-        # build the urllib2 object.
-        opener = urllib2.build_opener(urllib2.HTTPCookieProcessor)
-        opener.addheaders = [('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:15.0) Gecko/20120716 Firefox/15.0a2')]
-        # check if we got headers in the call.
+        # deal with headers first.
+        h = self.headers
+        # see if the user wants to add more.
         if headers:
-            opener.addheaders.append(headers)
+            h = h.append(headers)
         # big try except block and error handling for each.
         self.log.info("_openurl: Trying to open: {0}".format(url))
         try:
-            response = opener.open(url, timeout=5)
-            # by default, we're going to read the object into a string.
+            response = requests.get(url, headers=h, timeout=5)
+            # should we just return text or the actual object.
             if urlread:
-                return response.read()
-            else:  # however, in certain cases, this is not helpful because we need the urllib2 object.
+                return response.text
+            else:
                 return response
-        except urllib2.HTTPError, e:
-            self.log.info('_openurl: ERROR: Cannot open: {0} HTTP Error code: {1} '.format(url,e.code))
-            return None
-        except urllib2.URLError, e:
-            self.log.info('_openurl: ERROR: Cannot open: {0} URL error: {1} '.format(url,e.reason))
-            return None
-        except socket.timeout:
-            self.log.info('_openurl: ERROR: Cannot open: {0} timed out.'.format(url))
+        except Exception, e:
+            self.log.info('_openurl: ERROR: Cannot open: {0} ERROR: {1} '.format(url, e))
             return None
 
     ####################
@@ -376,13 +367,12 @@ class Titler(callbacks.Plugin):
             return None
         # parse content
         # now lets process the first 100k.
-        content = response.read(100*1024*1024)
+        content = response
         # before we do anything, lets figure out redirects.
-        # first and foremost, we must handle meta redirects. urllib2 handles 301/302 fine but not meta.
         RE_REFRESH_TAG = re.compile(r'<meta[^>]+http-equiv\s*=\s*["\']*Refresh[^>]+', re.I)
         RE_REFRESH_URL = re.compile(r'url=["\']*([^\'"> ]+)', re.I)
         # now test. this can probably be improved below.
-        match = RE_REFRESH_TAG.search(content)
+        match = RE_REFRESH_TAG.search(content.text)
         if match:
             match = RE_REFRESH_URL.search(match.group(0))
             if match:
@@ -394,29 +384,18 @@ class Titler(callbacks.Plugin):
                     return None
                 else:  # copy the new (redirected url) back to the old url string.
                     url = newurl
-                    content = response.read(100*1024*1024)
+                    content = response
         # now begin regular processing.
         # dict for handling/output.
         bsoptions = {}
-        # handle gzip, if present. decompress it.
-        if "Content-Encoding" in response.info() and response.info()["Content-Encoding"] == "gzip":
-            try:  # we never know if this won't work/breaks.
-                gunzip_obj = zlib.decompressobj(16+zlib.MAX_WBITS)
-                content = gunzip_obj.decompress(content)
-            except Exception, e:  # if something breaks, just pass and it will spit out gzip compressed data.
-                self.log.error("_fetchtitle: ERROR decompressing (gzip) :: {0} :: {1}".format(url, e))
-                pass
-        # get the "charset"
-        charset = response.info().getheader('Content-Type').split('charset=')
-        if len(charset) == 2:
-            bsoptions['fromEncoding'] = charset[-1]
+        # get the "charset" (encoding)
+        charset = response.encoding
         # dictionary for the type and size of content if provided in the http header.
         contentdict = {}
-        contentdict['type'] = response.info().getheader('Content-Type')
-        contentdict['size'] = response.info().getheader('Content-Length')
-        if not contentdict['size']:
-            contentdict['size'] = len(content)
-
+        contentdict['type'] = response.headers.get('content-type')
+        contentdict['size'] = response.headers.get('content-length')
+        if not contentdict['size']:  # case if we don't get length back.
+            contentdict['size'] = len(content.content)
         # now, process various types of content here. Image->text->others.
         # determine if it's an image and process.
         if contentdict['type'].startswith('image/'):
@@ -430,12 +409,10 @@ class Titler(callbacks.Plugin):
                     self.log.info("_fetchtitle: ERROR. I did not find PIL or Pillow installed. I cannot process images w/o this.")
                     return None
             # now we need cStringIO.
-            from cStringIO import StringIO
-
             try:  # try/except because images can be corrupt.
-                im = Image.open(StringIO(content))
-            except:
-                self.log.error("_fetchtitle: ERROR: {0} is an invalid image I cannot read.".format(url))
+                im = Image.open(StringIO(content.content))
+            except Exception, e:
+                self.log.error("_fetchtitle: ERROR: {0} is an invalid image I cannot read :: {1}".format(url, e))
                 return None
             imgformat = im.format
             if imgformat == 'GIF':  # check to see if animated.
@@ -451,9 +428,10 @@ class Titler(callbacks.Plugin):
         elif contentdict['type'].startswith('text/'):
             # wrap the whole thing because who the hell knows wtf will happen.
             try:  # try to parse w/BS + encode properly.
-                soup = BeautifulSoup(content, convertEntities=BeautifulSoup.HTML_ENTITIES, **bsoptions)
+                soup = BeautifulSoup(content.text, from_encoding=charset)
+                #soup = unicode(soup)  # convert html entities.
                 #self.log.info("{0}".format(soup))
-                title = self._cleantitle(soup.first('title').string)
+                title = self._cleantitle(soup.title.string)
                 # should we also fetch description? We have specific things to NOT fetch.
                 # bad extensions.
                 badexts = ['.jpg', '.jpeg', '.gif', '.png']
@@ -489,7 +467,7 @@ class Titler(callbacks.Plugin):
         else:
             try:
                 typeoffile = magic.from_buffer(content)
-                return "Content type: {0}  Size: {1}".format(typeoffile, self._sizefmt(contentdict['size']))
+                return "Content type: {0} - Size: {1}".format(typeoffile, self._sizefmt(contentdict['size']))
             except Exception, e:  # give a detailed error here in the logs.
                 self.log.error("ERROR: _fetchtitle: error trying to parse {0} via other (else) :: {1}".format(url, e))
                 self.log.error("ERROR: _fetchtitle: no handler for {0} at {1}".format(response.info().getheader('Content-Type'), url))
@@ -612,6 +590,7 @@ class Titler(callbacks.Plugin):
             #matches = re.finditer(urlpattern, text.strip(), re.IGNORECASE + re.VERBOSE)
             for url in utils.web.urlRe.findall(text):
             #for url in matches:
+                self.log.info("FOUND URL: {0}".format(url))
                 # url = self._tidyurl(url)  # should we tidy them?
                 output = self._titler(url, channel)
                 # now, with gd, we must check what output is.
