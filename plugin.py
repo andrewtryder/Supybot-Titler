@@ -256,6 +256,17 @@ class Titler(callbacks.Plugin):
         url = re.sub('(.*)(http[^\s]*)', '\g<2>', url)
         return url
 
+    def _tidydesc(self, desc):
+        """Tidies up description string."""
+
+        desc = desc.replace('\n', '').replace('\r', '')
+        return desc
+
+
+    # we'll need to support unicode urls..
+    # http://stackoverflow.com/questions/4389572/how-to-fetch-a-non-ascii-url-with-python-urlopen
+    # iri/uri https://docs.djangoproject.com/en/dev/ref/unicode/
+
     #####################
     # LONGURL FUNCTIONS #
     #####################
@@ -340,7 +351,7 @@ class Titler(callbacks.Plugin):
     # MAIN LOGIC FOR FETCHING TITLES #
     ##################################
 
-    def _titledirector(self, url, gd=False):
+    def _titledirector(self, url, gd=False, di=True):
         """Main logic for how to handle links."""
 
         domain = urlparse(url).hostname  # parse out domain.
@@ -350,14 +361,14 @@ class Titler(callbacks.Plugin):
             parsemethod = getattr(self, self.domainparsers[domain])
             title = parsemethod(url)
             # if this breaks, should we resort to generic title fetching?
-            if not title:
+            if not title:  # make sure that we don't get description on these.
                 title = self._fetchtitle(url, gd=False)
         else:  # we don't have a specific method so resort to generic title fetcher.
-            title = self._fetchtitle(url, gd)
+            title = self._fetchtitle(url, gd=gd, di=di)
         # now return the title.
         return title
 
-    def _fetchtitle(self, url, gd=False):
+    def _fetchtitle(self, url, gd=False, di=True):
         """Generic title fetcher for non-domain-specific titles."""
 
         # fetch the url.
@@ -369,6 +380,8 @@ class Titler(callbacks.Plugin):
         # now lets process the first 100k.
         content = response
         # before we do anything, lets figure out redirects.
+        # we might need to handle it like here:
+        # http://stackoverflow.com/questions/2318446/how-to-follow-meta-refreshes-in-python
         RE_REFRESH_TAG = re.compile(r'<meta[^>]+http-equiv\s*=\s*["\']*Refresh[^>]+', re.I)
         RE_REFRESH_URL = re.compile(r'url=["\']*([^\'"> ]+)', re.I)
         # now test. this can probably be improved below.
@@ -386,8 +399,6 @@ class Titler(callbacks.Plugin):
                     url = newurl
                     content = response
         # now begin regular processing.
-        # dict for handling/output.
-        bsoptions = {}
         # get the "charset" (encoding)
         charset = response.encoding
         # dictionary for the type and size of content if provided in the http header.
@@ -397,8 +408,8 @@ class Titler(callbacks.Plugin):
         if not contentdict['size']:  # case if we don't get length back.
             contentdict['size'] = len(content.content)
         # now, process various types of content here. Image->text->others.
-        # determine if it's an image and process.
-        if contentdict['type'].startswith('image/'):
+        # determine if it's an image and process. di must also be True.
+        if contentdict['type'].startswith('image/') and di:
             # try/except with python images.
             try:  # first try going from Pillow
                 from PIL import Image
@@ -438,7 +449,7 @@ class Titler(callbacks.Plugin):
                 if __builtins__['any'](url.endswith(x) for x in badexts):
                     gd = False
                 else:
-                    baddomains = ['twitter.com', 'panoramio.com', 'kickass.to', 'tinypic.com', 'ebay.com', 'imgur.com']
+                    baddomains = ['twitter.com', 'panoramio.com', 'kickass.to', 'tinypic.com', 'ebay.com', 'imgur.com', 'dropbox.com']
                     # bad domains.
                     urlhostname = urlparse(url).hostname
                     if __builtins__['any'](b in urlhostname for b in baddomains):
@@ -450,7 +461,7 @@ class Titler(callbacks.Plugin):
                         #self.log.info("DESC IS: {0} TYPE: {1}".format(desc, type(desc)))
                         if desc.get('content'):
                             #self.log.info("We're returning with content")
-                            return {'title': title.encode('utf-8', 'ignore'), 'desc': desc['content'].encode('utf-8', 'ignore') }
+                            return {'title': title.encode('utf-8', 'ignore'), 'desc': self._tidydesc(desc['content'].encode('utf-8', 'ignore')) }
                         else:
                             #self.log.info("Not returning with content.")
                             return title.encode('utf-8', 'ignore')
@@ -465,12 +476,12 @@ class Titler(callbacks.Plugin):
                 return None
         # handle any other filetype using libmagic.
         else:
-            try:
-                typeoffile = magic.from_buffer(content)
+            try:  # we could also incorporate some type of metadata attempt via exif here.
+                typeoffile = magic.from_buffer(content.content)
                 return "Content type: {0} - Size: {1}".format(typeoffile, self._sizefmt(contentdict['size']))
             except Exception, e:  # give a detailed error here in the logs.
                 self.log.error("ERROR: _fetchtitle: error trying to parse {0} via other (else) :: {1}".format(url, e))
-                self.log.error("ERROR: _fetchtitle: no handler for {0} at {1}".format(response.info().getheader('Content-Type'), url))
+                self.log.error("ERROR: _fetchtitle: no handler for {0} at {1}".format(contentdict['type'], url))
                 return None
 
     ##############
@@ -495,6 +506,11 @@ class Titler(callbacks.Plugin):
             displayDesc = True
         else:
             displayDesc = False
+        # display image titles if someone pastes a jpg?
+        if self.registryValue('displayImageTitles', channel):
+            displayImages = True
+        else:
+            displayImages = False
         # now, work with the above strings and make our calls.
         # before we do anything, if a "shortened" link is pasted, we have to "expand" (or try) it.
         domain = urlparse(url).hostname  # parse out domain.
@@ -505,7 +521,7 @@ class Titler(callbacks.Plugin):
                 url = expandedurl  # use the realurl.
         # we always want the title. gd will be handled separately.
         if displayDesc:  # this will return a dict vs a string. we need to handle this properly below.
-            title = self._titledirector(url, gd=True)
+            title = self._titledirector(url, gd=True, di=displayImages)
             # now, due to how _fetchtitle works, we don't know how the string will return
             # due to URL content. we prepare an instance below.
             if isinstance(title, dict):  # we got a dict back.
@@ -521,7 +537,7 @@ class Titler(callbacks.Plugin):
                 desc = None
             # did not get a dict back.
         else:  # don't display description.
-            title, desc = self._titledirector(url), None
+            title, desc = self._titledirector(url, gd=False, di=displayImages), None
 
         # now work wit hthe urls.
         if displayURL:
