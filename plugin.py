@@ -399,8 +399,11 @@ class Titler(callbacks.Plugin):
             return None
         # now try to parse json.
         try:
-            bitlyurl = json.loads(lookup)
-            return bitlyurl['data']['url']
+            data = json.loads(lookup)
+            if data['status_code'] == 500:  # 500 means you're pasting in an already shortened link.
+                return url  # just return it back.
+            else:  # try and get the shortened link.
+                return data['data']['url']
         except Exception, e:
             self.log.error("_shortenurl: error parsing JSON: {0}".format(e))
             return None
