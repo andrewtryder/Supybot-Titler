@@ -43,11 +43,14 @@ STATUS: Working but I'm sure bugs are present. Try if you want. Submit to me any
 Setting up
 ==========
 
-- 1.) You will need 'python-magic': https://github.com/ahupp/python-magic
+- 1.) Required Python 2 libraries:
 
-    The current stable version of python-magic is available on pypi and can be installed by running:
+    - python-magic, Pillow, requests, bs4 (make a change if you install them locally like I do)
 
         pip install python-magic
+        pip install Pillow
+        pip install requests
+        pip install bs4
 
 - 2.) To shorten links, you will need a Bitly API key (free).
 

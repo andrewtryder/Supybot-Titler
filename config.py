@@ -27,7 +27,7 @@ conf.registerGlobalValue(Titler, 'bitlyApiKey', registry.String('', _("""bitly k
 conf.registerChannelValue(Titler, 'disableChannel', registry.Boolean(False, _("""Disable all functionality in a certain channel?""")))
 conf.registerChannelValue(Titler, 'displayURL', registry.Boolean(True, _("""Display URL with the title?""")))
 conf.registerChannelValue(Titler, 'displayShortURL', registry.Boolean(True, _("""Shorten that URL (must set bitly config)?""")))
-conf.registerChannelValue(Titler, 'displayImageTitles', registry.Boolean(True, _("""Display information about images?""")))
+conf.registerChannelValue(Titler, 'displayImageTitles', registry.Boolean(True, _("""Ignore pasted images? if True, no title nor image dimensions will be pasted.""")))
 conf.registerChannelValue(Titler, 'displayOtherTitles', registry.Boolean(True, _("""Display title when we don't know what it is.""")))
 conf.registerChannelValue(Titler, 'displayDescriptionIfText', registry.Boolean(True, _("""If text article is pasted, display a summary if available?""")))
 

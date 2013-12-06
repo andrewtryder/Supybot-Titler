@@ -14,10 +14,9 @@ import time  # longurl cache.
 import sqlite3 as sqlite  # linkdb.
 import os  # linkdb
 import magic  # python-magic
-from cStringIO import StringIO  # images.
 from bs4 import BeautifulSoup  # bs4
-#from BeautifulSoup import BeautifulSoup
 from urlparse import urlparse, parse_qs
+from cStringIO import StringIO  # images.
 # extra supybot libs
 import supybot.ircmsgs as ircmsgs
 import supybot.conf as conf
