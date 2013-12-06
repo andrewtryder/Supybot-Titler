@@ -15,7 +15,7 @@ import sqlite3 as sqlite  # linkdb.
 import os  # linkdb
 import magic  # python-magic
 from bs4 import BeautifulSoup  # bs4
-from urlparse import urlparse, parse_qs
+from urlparse import urlparse, parse_qs, urlsplit, urlunsplit, urlunparse
 from cStringIO import StringIO  # images.
 # extra supybot libs
 import supybot.ircmsgs as ircmsgs
@@ -27,7 +27,6 @@ import supybot.plugins as plugins
 import supybot.ircutils as ircutils
 import supybot.callbacks as callbacks
 from supybot.i18n import PluginInternationalization, internationalizeDocstring
-#url_normalize = utils.python.universalImport('local.url_normalize')
 
 _ = PluginInternationalization('Titler')
 
@@ -261,10 +260,70 @@ class Titler(callbacks.Plugin):
         desc = desc.replace('\n', '').replace('\r', '')
         return desc
 
-
     # we'll need to support unicode urls..
     # http://stackoverflow.com/questions/4389572/how-to-fetch-a-non-ascii-url-with-python-urlopen
     # iri/uri https://docs.djangoproject.com/en/dev/ref/unicode/
+
+    # iri2uri ripped from httplib2
+    # https://code.google.com/p/httplib2/source/browse/python2/httplib2/iri2uri.py
+    def encode(self, c):
+        retval = c
+        i = ord(c)
+        # escape range.
+        escape_range = [
+            (0xA0, 0xD7FF),
+            (0xE000, 0xF8FF),
+            (0xF900, 0xFDCF),
+            (0xFDF0, 0xFFEF),
+            (0x10000, 0x1FFFD),
+            (0x20000, 0x2FFFD),
+            (0x30000, 0x3FFFD),
+            (0x40000, 0x4FFFD),
+            (0x50000, 0x5FFFD),
+            (0x60000, 0x6FFFD),
+            (0x70000, 0x7FFFD),
+            (0x80000, 0x8FFFD),
+            (0x90000, 0x9FFFD),
+            (0xA0000, 0xAFFFD),
+            (0xB0000, 0xBFFFD),
+            (0xC0000, 0xCFFFD),
+            (0xD0000, 0xDFFFD),
+            (0xE1000, 0xEFFFD),
+            (0xF0000, 0xFFFFD),
+            (0x100000, 0x10FFFD),
+        ]
+        for low, high in escape_range:
+            if i < low:
+                break
+            if i >= low and i <= high:
+                retval = "".join(["%%%2X" % ord(o) for o in c.encode('utf-8')])
+                break
+        return retval
+
+    def iri2uri(self, uri):
+        """Convert an IRI to a URI. Note that IRIs must be
+        passed in a unicode strings. That is, do not utf-8 encode
+        the IRI before passing it into the function."""
+        if isinstance(uri ,unicode):
+            (scheme, authority, path, query, fragment) = urlsplit(uri)
+            authority = authority.encode('idna')
+            # For each character in 'ucschar' or 'iprivate'
+            #  1. encode as utf-8
+            #  2. then %-encode each octet of that utf-8
+            uri = urlunsplit((scheme, authority, path, query, fragment))
+            uri = "".join([self.encode(c) for c in uri])
+        return uri
+
+    def urlEncodeNonAscii(self, b):
+        return re.sub('[\x80-\xFF]', lambda c: '%%%02x' % ord(c.group(0)), b)
+
+    def iriToUri(self, iri):
+        parts= urlparse(iri)
+        return urlunparse(
+            part.encode('idna') if parti==1 else urlEncodeNonAscii(part.encode('utf-8'))
+            for parti, part in enumerate(parts)
+        )
+
 
     #####################
     # LONGURL FUNCTIONS #
@@ -606,6 +665,10 @@ class Titler(callbacks.Plugin):
             for url in utils.web.urlRe.findall(text):
             #for url in matches:
                 self.log.info("FOUND URL: {0}".format(url))
+                url = url.decode('utf-8')
+                url = unicode(url)
+                url = self.iri2uri(url)
+                self.log.info("after iri to uri: {0}".format(url))
                 # url = self._tidyurl(url)  # should we tidy them?
                 output = self._titler(url, channel)
                 # now, with gd, we must check what output is.
@@ -632,6 +695,13 @@ class Titler(callbacks.Plugin):
         """
 
         channel = msg.args[0]
+
+        # clean up opturl
+        opturl = opturl.decode('utf-8')
+        opturl = unicode(opturl)
+        opturl = self.iri2uri(opturl)
+
+        # main.
         output = self._titler(opturl, channel)
         # now, with gd, we must check what output is.
         if output:  # if we did not get None back.
