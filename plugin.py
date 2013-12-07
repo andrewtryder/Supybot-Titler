@@ -832,7 +832,7 @@ class Titler(callbacks.Plugin):
             self.log.error("_vinetitle: could not fetch: {0}".format(url))
             return None
         # soup it.
-        soup = BeautifulSoup(lookup, convertEntities=BeautifulSoup.HTML_ENTITIES)
+        soup = BeautifulSoup(lookup)
         desc = soup.find('meta', {'property':'twitter:description'})
         if not desc:
             return None
