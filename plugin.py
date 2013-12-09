@@ -586,7 +586,7 @@ class Titler(callbacks.Plugin):
             # now, due to how _fetchtitle works, we don't know how the string will return
             # due to URL content. we prepare an instance below.
             if isinstance(title, dict):  # we got a dict back.
-                self.log.info("title brought back: {0}".format(title))
+                #self.log.info("title brought back: {0}".format(title))
                 if 'desc' in title:
                     desc = title['desc']
                 else:
@@ -594,6 +594,9 @@ class Titler(callbacks.Plugin):
                     desc = None
                 # now set title. desc set above.
                 title = title['title']
+                # but, lets also check if desc == title so we don't spew dupes.
+                if title and desc and title == desc:  # they match strings.
+                    desc = None
             else:  # didn't get a dict back so no desc.
                 desc = None
             # did not get a dict back.
@@ -677,14 +680,14 @@ class Titler(callbacks.Plugin):
                 # now, with gd, we must check what output is.
                 if output:  # if we did not get None back.
                     if isinstance(output, dict):  # came back a dict.
-                        if 'title' in output:
+                        # output.
+                        if 'desc' in output and 'title' in output and output['desc'] is not None and output['title'] is not None:
                             irc.sendMsg(ircmsgs.privmsg(channel, "{0}".format(output['title'])))
-                            if 'desc' in output:
-                                irc.sendMsg(ircmsgs.privmsg(channel, "{0}".format(output['desc'])))
-                        #for v in sorted(output.values(), reverse=True):
-                        #    irc.queueMsg(ircmsgs.privmsg(channel, "{0}".format(v)))
-                    else:  # not a dict. just the title part (no gd)
-                        irc.queueMsg(ircmsgs.privmsg(channel, output))
+                            irc.sendMsg(ircmsgs.privmsg(channel, "{0}".format(output['desc'])))
+                        elif 'title' in output and output['title'] is not None:
+                            irc.sendMsg(ircmsgs.privmsg(channel, "{0}".format(output['title'])))
+                    else:  # no desc.
+                        irc.sendMsg(ircmsgs.privmsg(channel, "{0}".format(output)))
 
     #####################################################
     # PUBLIC/PRIVATE TRIGGER, MAINLY USED FOR DEBUGGING #
