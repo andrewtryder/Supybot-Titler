@@ -400,8 +400,13 @@ class Titler(callbacks.Plugin):
         # now try to parse json.
         try:
             data = json.loads(lookup)
-            if data['status_code'] == 500:  # 500 means you're pasting in an already shortened link.
-                return url  # just return it back.
+            if data['status_code'] == 500:  # 500 error.
+                if 'status_txt' in data:
+                    self.log.error("_shortenurl: ERROR trying to shorten {0} :: {1}".format(url, data['status_txt']))
+                    return url  # just return it back.
+                else:
+                    self.log.error("_shortenurl: ERROR trying to shorten {0} :: {1}".format(url, data))
+                    return url
             else:  # try and get the shortened link.
                 return data['data']['url']
         except Exception, e:
@@ -752,7 +757,7 @@ class Titler(callbacks.Plugin):
         # now, lets break it up by /
         pathnamesplit = pathname.split('/')
         # determine what api/calls to use now based on this. instead of a general api handler, we do a call from within.
-        self.log.info("PATHNANMESPLIT: {0}".format(pathnamesplit))
+        #self.log.info("PATHNANMESPLIT: {0}".format(pathnamesplit))
         if pathnamesplit[0] == "r":  # subreddit or comment to one.
             subreddit = pathnamesplit[1]
             # now, we must determine if a user pasted a subreddit or a link to a post within one.
