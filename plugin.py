@@ -437,6 +437,7 @@ class Titler(callbacks.Plugin):
     def _fetchtitle(self, url, gd=False, di=True):
         """Generic title fetcher for non-domain-specific titles."""
 
+        #self.log.info("DI IS: {0}".format(di))
         # fetch the url.
         response = self._openurl(url, urlread=False)
         if not response:  # make sure we have a resposne.
@@ -475,7 +476,10 @@ class Titler(callbacks.Plugin):
             contentdict['size'] = len(content.content)
         # now, process various types of content here. Image->text->others.
         # determine if it's an image and process. di must also be True.
-        if contentdict['type'].startswith('image/') and di:
+        if contentdict['type'].startswith('image/'):
+            # first, we have to check di.
+            if not di:  # should we display image titles in this context?
+                return None
             # try/except with python images.
             try:  # first try going from Pillow
                 from PIL import Image
