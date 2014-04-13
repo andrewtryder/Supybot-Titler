@@ -21,6 +21,7 @@ IDEA/CODE for amazon plugin.
 - My understanding is that Amazon also is 'random' in the information returned on each item, so a plugin could be challenging.
 - Here is scratch code that works
 
+```
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -66,3 +67,4 @@ response_text = response.read()
 print type(response_text)
 print response_text
 
+```
