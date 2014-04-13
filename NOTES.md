@@ -1,3 +1,16 @@
+
+  File "/home/spline/supybot/plugins/Titler/plugin.py", line 723, in titler
+    output = self._titler(opturl, channel)
+  File "/home/spline/supybot/plugins/Titler/plugin.py", line 588, in _titler
+    if domain in self.longUrlServices:
+TypeError: argument of type 'NoneType' is not iterable
+
+
+BUGGY URL:
+
+http://mp3.rtvslo.si/ars
+
+
 - Maybe pass already tiny'd links?
 
 http://mashable.com/2013/01/23/unlocking-cellphones-illegal/
@@ -21,6 +34,7 @@ IDEA/CODE for amazon plugin.
 - My understanding is that Amazon also is 'random' in the information returned on each item, so a plugin could be challenging.
 - Here is scratch code that works
 
+```
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -65,4 +79,4 @@ response_text = response.read()
 
 print type(response_text)
 print response_text
-
+```
