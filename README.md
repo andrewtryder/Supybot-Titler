@@ -86,3 +86,9 @@ Setting up
 
     Otherwise, you will have dupes being pasted. You do not need to unload either and I don't recommend it as each has functionality
     elsewhere in the bot.
+
+- 5.) Enable Titler
+    
+```
+/msg <bot> config channel <#channel> plugins.Titler.disableChannel.False
+```
