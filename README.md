@@ -28,8 +28,8 @@ I also combined functionality of ShrinkUrl into this so that you can spit out a 
 title on a single line.
 
 In addition to snarfing titles, a user, snackle, suggested a way for text links (like a link to an online article)
-to come back with a "description" if available. Many online news agencies publish short summaries of the articles,
-different from the <title> of the article, inside a <meta name="description" content=""> field. There is an option
+to come back with a `description` if available. Many online news agencies publish short summaries of the articles,
+different from the `<title>` of the article, inside a `<meta name="description" content="">` field. There is an option
 to have this displayed if available. NOTE: Quite a number of sites don't publish this so don't always expect it if
 enabled (on by default).
 
@@ -47,10 +47,9 @@ Setting up
 
     - python-magic, Pillow, requests, bs4 (make a change if you install them locally like I do)
 
-        pip install python-magic
-        pip install Pillow
-        pip install requests
-        pip install bs4
+```
+pip install -r requirements.txt
+```
 
 - 2.) To shorten links, you will need a Bitly API key (free).
 
@@ -65,8 +64,10 @@ Setting up
 
     It will have a login and API key. Configure these into the plugin as such:
 
+```
     /msg <bot> config plugins.Titler.bitlyLogin LOGIN
     /msg <bot config plugins.Titler.bitlyApiKey APIKEYHERE
+```
 
     Now reload the plugin.
 
@@ -77,12 +78,16 @@ Setting up
 
 - 3.) You might already have PIL installed but I recommend ditching it for the newer Python Imaging Library called "Pillow":
 
-    pip install Pillow
+```
+    pip install -r requirements.txt
+```
 
 - 4.) If you're already using ShrinkURL and Web, disable their overlapping features.
 
+```
     /msg <bot> plugins.ShrinkUrl.shrinkSnarfer False
     /msg <bot> plugins.Web.titleSnarfer False
+```
 
     Otherwise, you will have dupes being pasted. You do not need to unload either and I don't recommend it as each has functionality
     elsewhere in the bot.
