@@ -1,3 +1,6 @@
+NOTE: I am no longer developing this plugin. I do not have the time to support a project this big. If you'd like to take over, feel free to fork or take the code and go. It's a great plugin but just far too much overhead for me to support.
+
+
 Supybot-Titler
 ==============
 
