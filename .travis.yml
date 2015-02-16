@@ -1,0 +1,15 @@
+language: python
+python:
+  - "2.6"
+  - "2.7"
+  - "pypy"
+
+before_install:
+  - pip install -v limnoria
+
+install:
+  - pip install -vr requirements.txt
+
+script:
+  - echo $TRAVIS_PYTHON_VERSION
+  - supybot-test ../${PWD##*/}
