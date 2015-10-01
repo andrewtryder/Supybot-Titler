@@ -509,7 +509,10 @@ class Titler(callbacks.Plugin):
         elif contentdict['type'].startswith('text/'):
             # wrap the whole thing because who the hell knows wtf will happen.
             try:  # try to parse w/BS + encode properly.
-                soup = BeautifulSoup(content.text, from_encoding=charset)
+                if charset.lower() == 'utf-8':
+                  soup = BeautifulSoup(content.text)
+                else:
+                  soup = BeautifulSoup(content.text, from_encoding=charset)
                 #soup = unicode(soup)  # convert html entities.
                 #self.log.info("{0}".format(soup))
                 title = self._cleantitle(soup.title.string)
